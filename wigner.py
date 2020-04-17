@@ -1,5 +1,4 @@
 from numpy import *
-from scipy import *
 
 factL = [1]
 
@@ -10,9 +9,13 @@ def factorial_list(n):
             factL.append(factL[i-1]*i)
     return factL
 
+def Delta(j1,j2,j3):
+    return factL[int(j1+j2-j3)] * factL[int(j1-j2+j3)] * factL[int(-j1+j2+j3)] *1.0 / factL[int(j1+j2+j3+1)]
+
 def wigner3J(j1,j2,j3,m1,m2,m3):
     # calculate wigner 3j symbol using the formulas, no recursion
     # https://mathworld.wolfram.com/Wigner3j-Symbol.html
+    # edmonds
     
     # check some sums and triangle rules 
     if m1+m2+m3 != 0:
@@ -33,7 +36,6 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
     #print factL
 
     
-    Delta = factL[int(j1+j2-j3)] * factL[int(j1-j2+j3)] * factL[int(-j1+j2+j3)] *1.0 / factL[int(j1+j2+j3+1)]
     Beta  = factL[int(j1+m1)] * factL[int(j1-m1)] * factL[int(j2+m2)] * factL[int(j2-m2)] * factL[int(j3+m3)] * factL[int(j3-m3)]
 
     # range of t
@@ -46,4 +48,8 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
         x = factL[t] * factL[int(j3-j2+t+m1)] * factL[int(j3-j1+t-m2)] * factL[int(j1+j2-j3-t)] * factL[int(j1-t-m1)] * factL[int(j2-t+m2)]
         sumt = sumt + (-1.0)**t/ x
 
-    return sign*sqrt(Delta*Beta)*sumt
+    return sign*sqrt(Delta(j1,j2,j3)*Beta)*sumt
+
+def CG(j1,m1,j2,m2,j,m):
+    return (-1)**(m+j1-j2) * sqrt(2*j+1) * wigner3J(j1,j2,j,m1,m2,-m)
+
