@@ -8,72 +8,128 @@ import matplotlib.pyplot as plt
 
 #verbose = True
 verbose = False
-
+diagram = False
 
 def main(argv):
-
+    parities = ["+","-"]
     np.set_printoptions(linewidth=300)
     ## simple test
     #test()
+    #return
     Nmax = int(argv[0])
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
     Nlev = Nnuc/2
-    
-    par ={'kappa': 0.06, 'mu': 0.5, 'delta': 0.2}
-    diaopt = {'lowd': -0.3, 'highd': 0.3, 'Nd': 20}
+    mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
+    par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.2}
+    diaopt = {'lowd': -0.3, 'highd': 0.3, 'Nd': 50}
     Nd = diaopt['Nd']
-    sw = (diaopt['highd'] - diaopt['lowd'] )/(diaopt['Nd']-1)
-    deltas = np.arange(-0.3,0.3+sw,sw)
+    deltas = np.linspace(diaopt['lowd'],diaopt['highd'],num=diaopt['Nd'],endpoint=True)
     el = np.zeros((Nlev,Nd))
-    #print el
+    wf = np.zeros((Nlev,Nlev,Nd))
+    label = ["" for r in range(Nlev)]
+    QN = [() for r in range(Nlev)]
     cur = 0
+    
     for Omega in np.arange(0.5,Nmax+1,1):
         if verbose:
             print "Omega ", Omega
         for Parity in [0,1]:
             if verbose:
                 print "Parity ", Parity
-            for d in range(Nd):
+            for d in range(len(deltas)):
                 delta = deltas[d]
                 #print d, delta
                 par['delta'] = delta
                 r = runnilsson(Nmax,Omega,Parity,par)
                 val = r['eValues']
-                #print val
-                if len(val) == 0:                   
+                if r['nstates'] == 0:                   
                     continue
-                for v in range(len(val)):
+                for v in range(r['nstates']):
                     el[cur+v][d] = val[v]
-                #print el
-            if len(val) > 0:
-                cur = cur + len(val)
-    for l in range(Nlev):
-        plt.plot(deltas,el[l])
-
+                    #print r['eVectors'][v]
+                    for w in range(len(r['eVectors'][v])):
+                        #print r['eVectors'][v][w]
+                        wf[cur+v,cur+w,d] = r['eVectors'][v][w]
+                
+            print "---------------------------"
+            ctr = [0 for c in range(Nmax+1)]
+            for v in range(r['nstates']):
+                N = r['states'][v][0]
+                nz = N-ctr[N]-(Omega-0.5)
+                Lambda = -1
+                if (Omega - 0.5 +nz)%2 == N%2:
+                    Lambda = Omega - 0.5
+                if (Omega + 0.5 +nz)%2 == N%2:
+                    Lambda = Omega + 0.5
+                label[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+                QN[cur+v] = (Omega,Parity,N,nz,Lambda)
+                print "N = ", N ,", l =",  r['states'][v][1] ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
+                ctr[N] = ctr[N] +1
+            if r['nstates'] > 0:
+                cur = cur + r['nstates']
+    #print wf
+    if diagram:
+        for l in range(Nlev):
+            plt.plot(deltas,el[l])
+            plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (label[l],l))
+            #print QN[l][-1], label[l]
+        plt.xlabel('$\delta$')
+        plt.ylabel('$E/\hbar\omega$')
+        plt.tick_params(axis='both', which='major')
+        plt.tick_params(axis='both', which='minor')
+    else:
+        pme = 3
+        for l in range(Nlev):
+            plt.plot(deltas,wf[pme][l]**2)
+            plt.text(deltas[-1]+0.02,wf[pme][l][-1]**2,"$%s$, %d" % (label[l],l))
+    plt.xlim(deltas[0]-0.05, deltas[-1]+0.2)
+    plt.tight_layout()
     plt.show()
 
 ## calculate the eigenvalues and vectors for a set of parameters
 def runnilsson(Nmax, Omega, Parity, pars):
     space = (Nmax, Omega, Parity)
-    ind = createstates(*space)
-    h = hamiltonian(space, ind, pars)
+    states = createstates(*space)
+    h = hamiltonian(space, states, pars)
     val, vec = diagonalize(h)
-    return {'pars': pars, 'nstates': len(ind), 'eValues': val, 'eVectors': vec}
-    
+    return {'pars': pars, 'states': states, 'nstates': len(states), 'eValues': val, 'eVectors': vec}
 
 def test():
-    Nmax = 10
-    Omega = 3.5
-    Parity = 1
+    Nmax = 2
+    Omega = 0.5
+    Parity = 0
 
     space = (Nmax, Omega, Parity)
     ind = createstates(*space)
+    print ind
     
-    par ={'kappa': 0.06, 'mu': 0.5, 'delta': 0.2}
+    par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.02}
     h = hamiltonian(space, ind, par)
     val, vec = diagonalize(h)
     print val
-    
+    par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.00}
+    h = hamiltonian(space, ind, par)
+    val, vec = diagonalize(h)
+    for v in range(len(val)):
+        print val[v]
+        print vec[v]
+#    nz = [-1 for r in range(len(ind))]
+#    Lambda = [-1 for r in range(len(ind))]
+#    ctr = [0 for r in range(len(ind))]
+#    print ctr
+#    for v in range(len(ind)):
+#        N = ind[v][0]
+#        nz[v] = N-ctr[N]
+#        print Omega - 0.5, Omega + 0.5
+#        if (Omega - 0.5 +nz[v])%2 == N%2:
+#            Lambda[v] = Omega - 0.5
+#        if (Omega + 0.5 +nz[v])%2 == N%2:
+#            Lambda[v] = Omega + 0.5
+#        #label[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+#        #QN[cur+v] = (Omega,Parity,N,nz,Lambda, j)
+#        print "N = ", N ,", l =",  ind[v][1] ,", ml = ",  ind[v][2] ,", ms = ", ind[v][3] ,", v = ", v, ", nz = ", nz[v], ", Lamba = ", Lambda[v], ", Omega = ", Omega, ", E = ", val[v]
+#        ctr[N] = ctr[N] +1
+        
 def hamiltonian(space, index, pars):
     
     # basis is N,l,ml,ms
@@ -185,6 +241,8 @@ def createstates(n_max,omega,parity):
                         index[(n,l,ml,ms)] = ctr
                         ctr = ctr+1
     invindex = {value: key for key, value in index.items()}
+    #print index
+    #print invindex
     return invindex
     
 def diagonalize(ham):
