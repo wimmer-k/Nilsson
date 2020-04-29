@@ -8,25 +8,36 @@ import matplotlib.pyplot as plt
 
 #verbose = True
 verbose = False
-diagram = False
+diagram = True # False # 
+ell = ["s","p","d","f","g","h","i","j"]
 
 def main(argv):
+    global verbose
     parities = ["+","-"]
     np.set_printoptions(linewidth=300)
     ## simple test
-    #test()
-    #return
+    if len(argv)>0 and (argv[0]=="T" or argv[0]=="t"):
+        #verbose = True
+        test()
+        return
     Nmax = int(argv[0])
+    if len(argv)>1:
+        if argv[1] == "D" or argv[1] == "d":
+            diagram = True
+        else:
+            diagram = False
+            pme = int(argv[1])
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
     Nlev = Nnuc/2
     mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
     par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.2}
-    diaopt = {'lowd': -0.3, 'highd': 0.3, 'Nd': 50}
+    diaopt = {'lowd': -0.3, 'highd': 0.3, 'Nd': 31}
     Nd = diaopt['Nd']
     deltas = np.linspace(diaopt['lowd'],diaopt['highd'],num=diaopt['Nd'],endpoint=True)
     el = np.zeros((Nlev,Nd))
     wf = np.zeros((Nlev,Nlev,Nd))
-    label = ["" for r in range(Nlev)]
+    Nlabel = ["" for r in range(Nlev)]
+    Slabel = ["" for r in range(Nlev)]
     QN = [() for r in range(Nlev)]
     cur = 0
     
@@ -50,20 +61,24 @@ def main(argv):
                     for w in range(len(r['eVectors'][v])):
                         #print r['eVectors'][v][w]
                         wf[cur+v,cur+w,d] = r['eVectors'][v][w]
-                
+            #print wf    
             print "---------------------------"
             ctr = [0 for c in range(Nmax+1)]
             for v in range(r['nstates']):
                 N = r['states'][v][0]
                 nz = N-ctr[N]-(Omega-0.5)
+                l = r['states'][v][1]
+                n = (N-l)/2 + 1
+                j = r['states'][v][1] + r['states'][v][3]
                 Lambda = -1
                 if (Omega - 0.5 +nz)%2 == N%2:
                     Lambda = Omega - 0.5
                 if (Omega + 0.5 +nz)%2 == N%2:
                     Lambda = Omega + 0.5
-                label[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+                Nlabel[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+                Slabel[cur+v] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
                 QN[cur+v] = (Omega,Parity,N,nz,Lambda)
-                print "N = ", N ,", l =",  r['states'][v][1] ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
+                print "N = ", N ,", l =",  l ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
                 ctr[N] = ctr[N] +1
             if r['nstates'] > 0:
                 cur = cur + r['nstates']
@@ -71,18 +86,22 @@ def main(argv):
     if diagram:
         for l in range(Nlev):
             plt.plot(deltas,el[l])
-            plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (label[l],l))
-            #print QN[l][-1], label[l]
+            plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (Nlabel[l],l), ha = 'left')
+            plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel[l],l), ha = 'right')
         plt.xlabel('$\delta$')
         plt.ylabel('$E/\hbar\omega$')
         plt.tick_params(axis='both', which='major')
         plt.tick_params(axis='both', which='minor')
     else:
-        pme = 3
+        for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+            i = np.where(abs(deltas - d)<0.01)[0]
+            print el[pme][i],
+        print '\n'
         for l in range(Nlev):
-            plt.plot(deltas,wf[pme][l]**2)
-            plt.text(deltas[-1]+0.02,wf[pme][l][-1]**2,"$%s$, %d" % (label[l],l))
-    plt.xlim(deltas[0]-0.05, deltas[-1]+0.2)
+            plt.plot(deltas,wf[pme][l])
+            plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[l],l), ha = 'left')
+            plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[l],l), ha = 'right')
+    plt.xlim(deltas[0]-0.2, deltas[-1]+0.2)
     plt.tight_layout()
     plt.show()
 
@@ -95,24 +114,49 @@ def runnilsson(Nmax, Omega, Parity, pars):
     return {'pars': pars, 'states': states, 'nstates': len(states), 'eValues': val, 'eVectors': vec}
 
 def test():
-    Nmax = 2
+    Nmax = 1
     Omega = 0.5
-    Parity = 0
+    Parity = 1
 
     space = (Nmax, Omega, Parity)
     ind = createstates(*space)
     print ind
     
-    par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.02}
-    h = hamiltonian(space, ind, par)
-    val, vec = diagonalize(h)
-    print val
+    #par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.02}
+    #h = hamiltonian(space, ind, par)
+    #val, vec = diagonalize(h)
+    #print val
+    print "------------------- spherical -------------------"
     par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.00}
     h = hamiltonian(space, ind, par)
     val, vec = diagonalize(h)
     for v in range(len(val)):
+        print "eigenvalue"
         print val[v]
+        print "eigenvector"
         print vec[v]
+    mm = np.zeros((2,2))
+    mm[:,0] = vec[0]
+    mm[:,1] = vec[1]
+    print mm
+    print np.linalg.inv(mm)
+    print "basis trafo "
+    print np.dot(np.linalg.inv(mm),vec[0])
+    print np.dot(np.linalg.inv(mm),vec[1])
+    print "------------------- deformation -------------------"
+    par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.20}
+    h = hamiltonian(space, ind, par)
+    val, vec = diagonalize(h)
+    for v in range(len(val)):
+        print "eigenvalue"
+        print val[v]
+        print "eigenvector"
+        print vec[v]
+    
+    print "basis trafo "
+    print val[0], np.dot(np.linalg.inv(mm),vec[0])
+    print val[1], np.dot(np.linalg.inv(mm),vec[1])
+    
 #    nz = [-1 for r in range(len(ind))]
 #    Lambda = [-1 for r in range(len(ind))]
 #    ctr = [0 for r in range(len(ind))]
@@ -172,6 +216,9 @@ def hamiltonian(space, index, pars):
                 continue
             if l!=l2:
                 continue
+            if ml+ms != ml2+ms2:
+                continue
+            #print N,l,ml,ms,"\t",N2,l2,ml2,ms2 
             for sign in [-1.,+1.]:
                 if ml2 == ml+sign and ms2 == -sign*1/2 and ms == sign*1/2:
                     # spin orbit-part
@@ -180,9 +227,10 @@ def hamiltonian(space, index, pars):
 
     Hd = hamiltonian_delta(states)
     if verbose:
-        print -delta*omega_d*4./3*np.sqrt(np.pi/5)
-        print Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
-        print H + Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
+        print "H0 = \n", H
+        print "delta(omega) = ",-delta*omega_d*4./3*np.sqrt(np.pi/5)
+        print "Hd = \n", Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
+        print "H = \n", H + Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
         
     return H + Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
 
@@ -253,7 +301,9 @@ def diagonalize(ham):
     if verbose:
         print eValues
         print eVectors
-    return eValues, eVectors
+        print np.transpose(eVectors)
+    # eigenvectors are columns
+    return eValues, np.transpose(eVectors)
         
 if __name__ == "__main__":
    main(sys.argv[1:])
