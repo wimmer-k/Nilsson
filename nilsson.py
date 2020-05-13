@@ -10,10 +10,19 @@ import matplotlib.pyplot as plt
 verbose = False
 diagram = True # False # 
 ell = ["s","p","d","f","g","h","i","j"]
+parities = ["+","-"]
+eps = 0.01 # tolerance for energy matching
+# todo:
+# FEXED - spherical quantum numbers are wrong
+# - calcualte decoupling parameters, needs j
+# - parameters change as function of N, not nexcessarly Nmax, how to deal with this
+# - parameters, states and space are returned by runnilsson, but that is not required if the space is part of input
+# - commandline interface
+# - phase maybe wrong in some cases, check with eq 23,25 of Chi, Nucl. Phys. 83 (1966) 97
 
 def main(argv):
     global verbose
-    parities = ["+","-"]
+    
     np.set_printoptions(linewidth=300)
     ## simple test
     if len(argv)>0 and (argv[0]=="T" or argv[0]=="t"):
@@ -30,40 +39,107 @@ def main(argv):
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
     Nlev = Nnuc/2
     mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
-    par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.2}
-    diaopt = {'lowd': -0.3, 'highd': 0.3, 'Nd': 31}
+    par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
+
+    #options for the nillson diagram
+    diaopt = {'maxd': 0.3, 'Nd': 20}
     Nd = diaopt['Nd']
-    deltas = np.linspace(diaopt['lowd'],diaopt['highd'],num=diaopt['Nd'],endpoint=True)
-    el = np.zeros((Nlev,Nd))
-    wf = np.zeros((Nlev,Nlev,Nd))
+    deltas = np.linspace(-diaopt['maxd'],diaopt['maxd'],num=diaopt['Nd']*2+1,endpoint=True)
+    el = np.zeros((Nlev,Nd*2+1))
+    wf = np.zeros((Nlev,Nlev,Nd*2+1))
     Nlabel = ["" for r in range(Nlev)]
+    #Slabel = [ ["" for r in range(Nlev)] for r in range(Nlev) ]
     Slabel = ["" for r in range(Nlev)]
     QN = [() for r in range(Nlev)]
     cur = 0
-    
     for Omega in np.arange(0.5,Nmax+1,1):
         if verbose:
             print "Omega ", Omega
         for Parity in [0,1]:
             if verbose:
                 print "Parity ", Parity
-            for d in range(len(deltas)):
-                delta = deltas[d]
+
+            # calculate at def = 0 for basis transformation
+            par['delta'] = 0.0
+            #print par
+            space = (Nmax, Omega, Parity)
+            states = createstates(*space)
+            if len(states) < 1:
+                continue
+            
+            # determine basis transformation matrix from spherical calculation
+            r = runnilsson(space,states,par)
+            spvect = r['eVectors']
+            bt = basistrafo(spvect)
+            lastwfcoeff = wavefunction(bt,spvect)
+
+            # determine spherical quantum numbers and ordering
+            order = []
+            labels = ["" for s in range(len(states))]
+            #print r['eValues']
+            #print par
+            for i in range(len(states)):
+                N,l,ml,ms = states[i]
+                n = (N-l)/2+1
+                j = l + ms
+                SO = l if ms==+1./2 else -l-1
+                E = N+3./2-par['kappa']*par['mu']*(l*(l+1)- 1./2*N*(N+3))-2*par['kappa']*SO*1.0/2
+                #print E, E2, np.where(abs(E-r['eValues'])<eps)[0]
+                o = int(np.where(abs(E-r['eValues'])<eps)[0])
+                order.append(o)
+                labels[o] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
+            #print order
+            #print labels
+            #print lastwfcoeff
+
+
+            
+            #obalte
+            for d in range(Nd+1):
+                delta = deltas[Nd-d]
                 #print d, delta
                 par['delta'] = delta
-                r = runnilsson(Nmax,Omega,Parity,par)
+                r = runnilsson(space,states,par)
                 val = r['eValues']
                 if r['nstates'] == 0:                   
                     continue
+                wfcoeff = wavefunction(bt,r['eVectors'])
+                
                 for v in range(r['nstates']):
-                    el[cur+v][d] = val[v]
-                    #print r['eVectors'][v]
-                    for w in range(len(r['eVectors'][v])):
-                        #print r['eVectors'][v][w]
-                        wf[cur+v,cur+w,d] = r['eVectors'][v][w]
+                    el[cur+v][Nd-d] = val[v]
+                    # check overlap with last calculation, to avoid jumps invert vectors
+                    if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
+                        wfcoeff[v] = -wfcoeff[v]
+                    for w in range(len(wfcoeff[v])):
+                        wf[cur+v,cur+w,Nd-d] = wfcoeff[v][w]
+                lastwfcoeff = wfcoeff
+                
+            #reset last coefficients
+            lastwfcoeff = wavefunction(bt,spvect)
+            #prolate
+            for d in range(Nd+1):
+                delta = deltas[Nd+d]
+                #print d, delta
+                par['delta'] = delta
+                r = runnilsson(space,states,par)
+                val = r['eValues']
+                if r['nstates'] == 0:                   
+                    continue
+                wfcoeff = wavefunction(bt,r['eVectors'])
+                
+                for v in range(r['nstates']):
+                    el[cur+v][Nd+d] = val[v]
+                    # check overlap with last calculation, to avoid jumps invert vectors
+                    if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
+                        wfcoeff[v] = -wfcoeff[v]
+                    for w in range(len(wfcoeff[v])):
+                        wf[cur+v,cur+w,Nd+d] = wfcoeff[v][w]
+                lastwfcoeff = wfcoeff
             #print wf    
             print "---------------------------"
             ctr = [0 for c in range(Nmax+1)]
+            # sorted by energy, asymptitoc quantum numbers
+            
             for v in range(r['nstates']):
                 N = r['states'][v][0]
                 nz = N-ctr[N]-(Omega-0.5)
@@ -75,13 +151,23 @@ def main(argv):
                     Lambda = Omega - 0.5
                 if (Omega + 0.5 +nz)%2 == N%2:
                     Lambda = Omega + 0.5
-                Nlabel[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
-                Slabel[cur+v] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
-                QN[cur+v] = (Omega,Parity,N,nz,Lambda)
                 print "N = ", N ,", l =",  l ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
+                Nlabel[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+                QN[cur+v] = (Omega,Parity,N,nz,Lambda)
+                Slabel[cur+v] = labels[v]
                 ctr[N] = ctr[N] +1
+                #for w in range(len(lastwfcoeff[v])):
+                #    N = r['states'][w][0]
+                #    l = r['states'][w][1]
+                #    j = r['states'][w][1] + r['states'][w][3]
+                #    n = (N-l)/2 + 1
+                #    nz = N-ctr[N]+1-(Omega-0.5)
+                #    Slabel[cur+v][w] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
+                #    #print "n = ", n ,", l =",  l ,", j = ",  j,", j2 = ",  Omega+nz
+                
             if r['nstates'] > 0:
                 cur = cur + r['nstates']
+ 
     #print wf
     if diagram:
         for l in range(Nlev):
@@ -97,15 +183,25 @@ def main(argv):
             i = np.where(abs(deltas - d)<0.01)[0]
             print el[pme][i],
         print '\n'
+        plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
+        plt.plot([0,0],[np.min(wf[pme]),np.max(wf[pme])],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
-            plt.plot(deltas,wf[pme][l])
-            plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[l],l), ha = 'left')
-            plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[l],l), ha = 'right')
+            if max(wf[pme][l]) > 0 or min(wf[pme][l]) < 0:
+                plt.plot(deltas,wf[pme][l])
+                #plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[pme][l],l), ha = 'left')
+                #plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[pme][l],l), ha = 'right')
+                plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[l],l), ha = 'left')
+                plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[l],l), ha = 'right')
+                for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+                    i = np.where(abs(deltas - d)<0.01)[0]
+                    print wf[pme][l][i],
+                print '\n'
+                
     plt.xlim(deltas[0]-0.2, deltas[-1]+0.2)
     plt.tight_layout()
     plt.show()
 
-## calculate the eigenvalues and vectors for a set of parameters
+## calculate the eigenvalues and vectors for a set of parameters, determine model space
 def runnilsson(Nmax, Omega, Parity, pars):
     space = (Nmax, Omega, Parity)
     states = createstates(*space)
@@ -113,7 +209,75 @@ def runnilsson(Nmax, Omega, Parity, pars):
     val, vec = diagonalize(h)
     return {'pars': pars, 'states': states, 'nstates': len(states), 'eValues': val, 'eVectors': vec}
 
+## calculate the eigenvalues and vectors for a set of parameters, input model space
+def runnilsson(space, states, pars):
+    h = hamiltonian(space, states, pars)
+    val, vec = diagonalize(h)
+    return {'pars': pars, 'states': states, 'nstates': len(states), 'eValues': val, 'eVectors': vec}
+
+## determine the wave functions in terms of the spherical states
+def wavefunction(trafo, evectors):
+    return np.array([np.dot(trafo,v) for v in evectors])
+    
+## calculate basis transformation
+def basistrafo(evectors):
+    #print evectors
+    mm = np.transpose(evectors)
+    if verbose:
+        print "matrix of eigenvectors"
+        print mm
+        print "inverted matrix of eigenvectors"
+        print np.linalg.inv(mm)
+    return np.linalg.inv(mm)
+
 def test():
+    global verbose
+    Nmax = 2
+    Omega = 0.5
+    Parity = 0
+    verbose = True
+    space = (Nmax, Omega, Parity)
+    ind = createstates(*space)
+    print ind
+    par ={'kappa': 0.05, 'mu': 0.35, 'delta': 0.00}
+    h = hamiltonian(space, ind, par)
+    val, vec = diagonalize(h)
+    bt = basistrafo(vec)
+    tt0 = wavefunction(bt,vec)
+    print "spherical components"
+    print tt0
+
+    print val
+    mm = np.transpose(vec)
+    C = -2*par['kappa']
+    D = -par['kappa']*par['mu']
+    for i in range(len(ind)):
+        print '========================='
+        N,l,ml,ms = ind[i]
+        n = (N-l)/2+1
+        j = l + ms
+        print N,l,ml,ms
+        print n,l,j, "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
+        SO = l if ms==+1./2 else -l-1
+        print SO
+        E = N+3./2+D*(l*(l+1)- 1./2*N*(N+3))+C*SO/2
+        print E, np.where(abs(E-val)<0.05)[0]
+    ##print np.dot(vec, np.dot(h,mm))
+    #t =  np.array([np.dot(h,v) for v in vec])
+    #tt =  np.transpose(np.array([np.dot(h,v) for v in vec]))
+    #print t
+    #print tt
+    #print vec
+    #print t[0]*vec[0]
+    #print t[1]*vec[1]
+    #print t[2]*vec[2]
+    #print t[3]*vec[3]
+    #
+    #print tt[0]*vec[0]
+    #print tt[1]*vec[1]
+    #print tt[2]*vec[2]
+    #print tt[3]*vec[3]
+def testbasis():
     Nmax = 1
     Omega = 0.5
     Parity = 1
@@ -130,21 +294,27 @@ def test():
     par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.00}
     h = hamiltonian(space, ind, par)
     val, vec = diagonalize(h)
+    print vec
+    bt = basistrafo(vec)
+    tt0 = wavefunction(bt,vec)
     for v in range(len(val)):
         print "eigenvalue"
         print val[v]
         print "eigenvector"
         print vec[v]
-    mm = np.zeros((2,2))
-    mm[:,0] = vec[0]
-    mm[:,1] = vec[1]
+    #mm = np.zeros((2,2))
+    #mm[:,0] = vec[0]
+    #mm[:,1] = vec[1]
+    mm = np.transpose(vec)
+    print "matrix of eigenvectors"
     print mm
+    print "inverted matrix of eigenvectors"
     print np.linalg.inv(mm)
     print "basis trafo "
     print np.dot(np.linalg.inv(mm),vec[0])
     print np.dot(np.linalg.inv(mm),vec[1])
     print "------------------- deformation -------------------"
-    par ={'kappa': 0.05, 'mu': 0.0, 'delta': 0.20}
+    par ={'kappa': 0.05, 'mu': 0.0, 'delta': -0.20}
     h = hamiltonian(space, ind, par)
     val, vec = diagonalize(h)
     for v in range(len(val)):
@@ -156,6 +326,21 @@ def test():
     print "basis trafo "
     print val[0], np.dot(np.linalg.inv(mm),vec[0])
     print val[1], np.dot(np.linalg.inv(mm),vec[1])
+    print "return this"
+    print np.array([np.dot(np.linalg.inv(mm),v) for v in vec])
+
+    print "with functions"
+    tt = wavefunction(bt,vec)
+    print tt0[0]
+    print tt[0]
+    print -tt[0]
+
+    print np.dot(tt0[0],tt[0])
+    print np.dot(tt0[0],-tt[0])
+
+    print np.dot(tt0[1],tt[1])
+    print np.dot(tt0[1],-tt[1])
+
     
 #    nz = [-1 for r in range(len(ind))]
 #    Lambda = [-1 for r in range(len(ind))]
@@ -299,9 +484,10 @@ def diagonalize(ham):
     eValues = eValues[idx]
     eVectors = eVectors[:,idx]
     if verbose:
-        print eValues
-        print eVectors
-        print np.transpose(eVectors)
+        print "idx", idx
+        print "eValues\n", eValues
+        print "eVectors\n", eVectors
+        print "eVectors^T\n", np.transpose(eVectors)
     # eigenvectors are columns
     return eValues, np.transpose(eVectors)
         
