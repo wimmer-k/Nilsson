@@ -5,20 +5,20 @@ import numpy as np
 from memoize import Memoize
 from wigner import CG
 import matplotlib.pyplot as plt
+#import csv
 
 #verbose = True
 verbose = False
-diagram = True # False # 
+diagram = True # False #
 ell = ["s","p","d","f","g","h","i","j"]
 parities = ["+","-"]
-eps = 0.01 # tolerance for energy matching
+eps = 0.001 # tolerance for energy matching
 # todo:
-# FEXED - spherical quantum numbers are wrong
-# - calcualte decoupling parameters, needs j
+# FIXED - spherical quantum numbers are wrong
+# FIXED calculate decoupling parameters, needs j
 # - parameters change as function of N, not nexcessarly Nmax, how to deal with this
 # - parameters, states and space are returned by runnilsson, but that is not required if the space is part of input
 # - commandline interface
-# - phase maybe wrong in some cases, check with eq 23,25 of Chi, Nucl. Phys. 83 (1966) 97
 
 def main(argv):
     global verbose
@@ -36,21 +36,30 @@ def main(argv):
         else:
             diagram = False
             pme = int(argv[1])
+            plotdecoup = False
+            if len(argv)>2 and argv[2] == "A" or argv[2] == "a":
+                plotdecoup = True
+
+    ## basic model space and parameters
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
     Nlev = Nnuc/2
     mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
     par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
 
     #options for the nillson diagram
-    diaopt = {'maxd': 0.3, 'Nd': 20}
+    diaopt = {'maxd': 0.3, 'Nd': 30}
     Nd = diaopt['Nd']
     deltas = np.linspace(-diaopt['maxd'],diaopt['maxd'],num=diaopt['Nd']*2+1,endpoint=True)
+
+    #storage containers for el = energy levels, wf = wave functions, ap = decoupling parameter
     el = np.zeros((Nlev,Nd*2+1))
     wf = np.zeros((Nlev,Nlev,Nd*2+1))
-    Nlabel = ["" for r in range(Nlev)]
-    #Slabel = [ ["" for r in range(Nlev)] for r in range(Nlev) ]
-    Slabel = ["" for r in range(Nlev)]
-    QN = [() for r in range(Nlev)]
+    ap = np.zeros((Nlev,Nd*2+1))
+    # Nillson quantum numbers
+    nQN = [() for r in range(Nlev)]
+    # quantum numbers of the sperical states (origin)
+    sQN = [() for r in range(Nlev)]
+    
     cur = 0
     for Omega in np.arange(0.5,Nmax+1,1):
         if verbose:
@@ -75,29 +84,20 @@ def main(argv):
 
             # determine spherical quantum numbers and ordering
             order = []
-            labels = ["" for s in range(len(states))]
-            #print r['eValues']
-            #print par
+            slabels = [() for s in range(len(states))]
             for i in range(len(states)):
                 N,l,ml,ms = states[i]
                 n = (N-l)/2+1
                 j = l + ms
                 SO = l if ms==+1./2 else -l-1
                 E = N+3./2-par['kappa']*par['mu']*(l*(l+1)- 1./2*N*(N+3))-2*par['kappa']*SO*1.0/2
-                #print E, E2, np.where(abs(E-r['eValues'])<eps)[0]
                 o = int(np.where(abs(E-r['eValues'])<eps)[0])
                 order.append(o)
-                labels[o] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
-            #print order
-            #print labels
-            #print lastwfcoeff
-
-
+                slabels[o] = (n,l,j,Parity)
             
-            #obalte
+            #obalte part
             for d in range(Nd+1):
                 delta = deltas[Nd-d]
-                #print d, delta
                 par['delta'] = delta
                 r = runnilsson(space,states,par)
                 val = r['eValues']
@@ -111,15 +111,16 @@ def main(argv):
                     if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
                         wfcoeff[v] = -wfcoeff[v]
                     for w in range(len(wfcoeff[v])):
+                        ap[cur+v,Nd-d] += pow(-1,slabels[w][2]-0.5)*(slabels[w][2]+0.5)*wfcoeff[v][w]**2
                         wf[cur+v,cur+w,Nd-d] = wfcoeff[v][w]
                 lastwfcoeff = wfcoeff
                 
             #reset last coefficients
             lastwfcoeff = wavefunction(bt,spvect)
-            #prolate
+            
+            #prolate part
             for d in range(Nd+1):
                 delta = deltas[Nd+d]
-                #print d, delta
                 par['delta'] = delta
                 r = runnilsson(space,states,par)
                 val = r['eValues']
@@ -132,75 +133,105 @@ def main(argv):
                     # check overlap with last calculation, to avoid jumps invert vectors
                     if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
                         wfcoeff[v] = -wfcoeff[v]
+                    ap[cur+v,Nd+d] = 0
                     for w in range(len(wfcoeff[v])):
+                        ap[cur+v,Nd+d] += pow(-1,slabels[w][2]-0.5)*(slabels[w][2]+0.5)*wfcoeff[v][w]**2
                         wf[cur+v,cur+w,Nd+d] = wfcoeff[v][w]
                 lastwfcoeff = wfcoeff
             #print wf    
-            print "---------------------------"
+            if verbose:
+                print "---------------------------"
             ctr = [0 for c in range(Nmax+1)]
-            # sorted by energy, asymptitoc quantum numbers
-            
+            # asymptitoc quantum numbers            
             for v in range(r['nstates']):
                 N = r['states'][v][0]
                 nz = N-ctr[N]-(Omega-0.5)
                 l = r['states'][v][1]
-                n = (N-l)/2 + 1
-                j = r['states'][v][1] + r['states'][v][3]
                 Lambda = -1
                 if (Omega - 0.5 +nz)%2 == N%2:
                     Lambda = Omega - 0.5
                 if (Omega + 0.5 +nz)%2 == N%2:
                     Lambda = Omega + 0.5
-                print "N = ", N ,", l =",  l ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
-                Nlabel[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
-                QN[cur+v] = (Omega,Parity,N,nz,Lambda)
-                Slabel[cur+v] = labels[v]
+                if verbose:
+                    print "N = ", N ,", l =",  l ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
+                nQN[cur+v] = (Omega,Parity,N,nz,Lambda)
+                sQN[cur+v] = slabels[v]
                 ctr[N] = ctr[N] +1
-                #for w in range(len(lastwfcoeff[v])):
-                #    N = r['states'][w][0]
-                #    l = r['states'][w][1]
-                #    j = r['states'][w][1] + r['states'][w][3]
-                #    n = (N-l)/2 + 1
-                #    nz = N-ctr[N]+1-(Omega-0.5)
-                #    Slabel[cur+v][w] = "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
-                #    #print "n = ", n ,", l =",  l ,", j = ",  j,", j2 = ",  Omega+nz
                 
             if r['nstates'] > 0:
                 cur = cur + r['nstates']
  
-    #print wf
+    ## plotting    
+    
+    axes = []
+    plt.title("Nilsson calculation up to $N_{max} = %d$, $\kappa$ = %.2f, $\mu$ = %.2f" % (Nmax,par['kappa'],par['mu']))
     if diagram:
+        plt.plot([0,0],[np.min(el),np.max(el)],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
-            plt.plot(deltas,el[l])
-            plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (Nlabel[l],l), ha = 'left')
-            plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel[l],l), ha = 'right')
-        plt.xlabel('$\delta$')
+            plt.plot(deltas,el[l], ls="--" if nQN[l][1] == 1 else "-")
+            plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'left')
+            plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'right')
         plt.ylabel('$E/\hbar\omega$')
-        plt.tick_params(axis='both', which='major')
-        plt.tick_params(axis='both', which='minor')
     else:
+        print "Nilsson level", Nlabel(nQN[pme])
+        print "delta "
         for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
-            i = np.where(abs(deltas - d)<0.01)[0]
-            print el[pme][i],
-        print '\n'
+            print d,"\t\t",
+        print "\nenergies:"
+        for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+            i = np.where(abs(deltas - d)<eps)[0]
+            print el[pme][i],"\t",
+
+        # check if this is K = 1/2
+        if nQN[pme][0] == 0.5:
+            if plotdecoup:
+                axes.append(plt.subplot(2,1,1))
+                plt.title("decoupling parameter for $%s$ level" % Nlabel(nQN[pme]))
+                plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
+                plt.plot([0,0],[np.min(ap[pme]),np.max(ap[pme])],ls="--",linewidth=1,color='k')
+                plt.plot(deltas,ap[pme])
+                plt.ylabel('$a$')
+                axes.append(plt.subplot(2,1,2, sharex = axes[0]))
+                # write out to file
+                #with open('decop.dat', 'w') as f:
+                #    writer = csv.writer(f, delimiter='\t')
+                #    writer.writerows(zip(deltas,ap[pme]))
+                
+            print "\ndecouling parameter"
+            for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+                i = np.where(abs(deltas - d)<eps)[0]
+                print ap[pme][i],"\t",
+     
+        plt.title("wave function composition for $%s$ level" % Nlabel(nQN[pme]))
+        print '\nwave funtion composition'
         plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
         plt.plot([0,0],[np.min(wf[pme]),np.max(wf[pme])],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
             if max(wf[pme][l]) > 0 or min(wf[pme][l]) < 0:
                 plt.plot(deltas,wf[pme][l])
-                #plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[pme][l],l), ha = 'left')
-                #plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[pme][l],l), ha = 'right')
-                plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$, %d" % (Slabel[l],l), ha = 'left')
-                plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$, %d" % (Slabel[l],l), ha = 'right')
+                plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$" % (Slabel(sQN[l])), ha = 'left')
+                plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$" % (Slabel(sQN[l])), ha = 'right')
                 for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
-                    i = np.where(abs(deltas - d)<0.01)[0]
-                    print wf[pme][l][i],
-                print '\n'
+                    i = np.where(abs(deltas - d)<eps)[0]
+                    print wf[pme][l][i],"\t",
+                print Slabel(sQN[l])
+        plt.ylabel('$C_{\Omega j}$')
                 
+    plt.xlabel('$\delta$')
+    plt.tick_params(axis='both', which='major')
+    plt.tick_params(axis='both', which='minor')
     plt.xlim(deltas[0]-0.2, deltas[-1]+0.2)
     plt.tight_layout()
     plt.show()
 
+def Nlabel(QN):
+    Omega, Parity, N, nz, Lambda = QN
+    return "%d/2^{%s}[%d%d%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
+
+def Slabel(QN):
+    n, l, j, Parity = QN
+    return "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
+            
 ## calculate the eigenvalues and vectors for a set of parameters, determine model space
 def runnilsson(Nmax, Omega, Parity, pars):
     space = (Nmax, Omega, Parity)
