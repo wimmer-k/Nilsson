@@ -28,14 +28,14 @@ gR = 16./44
 
 # todo:
 # FIXED - spherical quantum numbers are wrong
-# FIXED - calculate decoupling parameters, needs j
-# FIXED - calculate magnitc moments, g-factors
-# - calculate spectroscopic factors
-# - g-factor for states with not Omega = K = J
+# DONE - calculate decoupling parameters, needs j
+# DONE - calculate magnitc moments, g-factors
+# DONE - calculate spectroscopic factors
+# DONE - g-factor for states with not Omega = K = J
 # - parameters change as function of N, not nexcessarly Nmax, how to deal with this
 # - parameters, states and space are returned by runnilsson, but that is not required if the space is part of input
 # - commandline interface
-# - separate pltting function
+# - separate plotting function
 
 def main(argv):
     global verbose
