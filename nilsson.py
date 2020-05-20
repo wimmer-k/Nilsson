@@ -7,15 +7,27 @@ from wigner import CG
 import matplotlib.pyplot as plt
 #import csv
 
-#verbose = True
-verbose = False
+# debugging and plotting options
+verbose = False # Frue #
 diagram = True # False #
+DeltaN2 = True # False #
+
+# constants
 ell = ["s","p","d","f","g","h","i","j"]
 parities = ["+","-"]
 eps = 0.001 # tolerance for energy matching
+# g factors free proton, neutron
+quench = 0.9
+gs = [5.585694, -3.826085]
+gl = [1.0     ,  0.0     ]
+
+gR = 16./44
+
 # todo:
 # FIXED - spherical quantum numbers are wrong
-# FIXED calculate decoupling parameters, needs j
+# FIXED - calculate decoupling parameters, needs j
+# - calculate magnitc moments, g-factors
+# - calculate spectroscopic factors
 # - parameters change as function of N, not nexcessarly Nmax, how to deal with this
 # - parameters, states and space are returned by runnilsson, but that is not required if the space is part of input
 # - commandline interface
@@ -29,16 +41,20 @@ def main(argv):
         #verbose = True
         test()
         return
+    print argv
     Nmax = int(argv[0])
+    plotopt = {'diagram': True, 'decoup': False, 'gfact': False}
+    
     if len(argv)>1:
         if argv[1] == "D" or argv[1] == "d":
-            diagram = True
+            plotopt['diagram'] = True
         else:
-            diagram = False
+            plotopt['diagram'] = False
             pme = int(argv[1])
-            plotdecoup = False
-            if len(argv)>2 and argv[2] == "A" or argv[2] == "a":
-                plotdecoup = True
+            if len(argv)>2 and (argv[2] == "A" or argv[2] == "a"):
+                plotopt['decoup'] = True
+            if len(argv)>2 and (argv[2] == "G" or argv[2] == "g"):
+                plotopt['gfact'] = True
 
     ## basic model space and parameters
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
@@ -55,19 +71,21 @@ def main(argv):
     el = np.zeros((Nlev,Nd*2+1))
     wf = np.zeros((Nlev,Nlev,Nd*2+1))
     ap = np.zeros((Nlev,Nd*2+1))
+    a2 = np.zeros((Nlev,Nd*2+1))
+    gf = np.zeros((2,Nlev,Nd*2+1))
     # Nillson quantum numbers
     nQN = [() for r in range(Nlev)]
     # quantum numbers of the sperical states (origin)
     sQN = [() for r in range(Nlev)]
     
     cur = 0
-    for Omega in np.arange(0.5,Nmax+1,1):
+    for Omega in np.arange(1./2,Nmax+1,1):
         if verbose:
             print "Omega ", Omega
         for Parity in [0,1]:
             if verbose:
                 print "Parity ", Parity
-
+                
             # calculate at def = 0 for basis transformation
             par['delta'] = 0.0
             #print par
@@ -83,7 +101,6 @@ def main(argv):
             lastwfcoeff = wavefunction(bt,spvect)
 
             # determine spherical quantum numbers and ordering
-            order = []
             slabels = [() for s in range(len(states))]
             for i in range(len(states)):
                 N,l,ml,ms = states[i]
@@ -92,27 +109,65 @@ def main(argv):
                 SO = l if ms==+1./2 else -l-1
                 E = N+3./2-par['kappa']*par['mu']*(l*(l+1)- 1./2*N*(N+3))-2*par['kappa']*SO*1.0/2
                 o = int(np.where(abs(E-r['eValues'])<eps)[0])
-                order.append(o)
                 slabels[o] = (n,l,j,Parity)
             
-            #obalte part
+            #oblate part
             for d in range(Nd+1):
                 delta = deltas[Nd-d]
                 par['delta'] = delta
                 r = runnilsson(space,states,par)
                 val = r['eValues']
+                vec = r['eVectors']
                 if r['nstates'] == 0:                   
                     continue
-                wfcoeff = wavefunction(bt,r['eVectors'])
+                
+                wfcoeff = wavefunction(bt,vec)
                 
                 for v in range(r['nstates']):
                     el[cur+v][Nd-d] = val[v]
                     # check overlap with last calculation, to avoid jumps invert vectors
                     if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
                         wfcoeff[v] = -wfcoeff[v]
+                    # calculate decoupling parameter and wave funtion in (nlj) representation
                     for w in range(len(wfcoeff[v])):
-                        ap[cur+v,Nd-d] += pow(-1,slabels[w][2]-0.5)*(slabels[w][2]+0.5)*wfcoeff[v][w]**2
+                        ap[cur+v,Nd-d] += pow(-1,slabels[w][2]-1./2)*(slabels[w][2]+1./2)*wfcoeff[v][w]**2
                         wf[cur+v,cur+w,Nd-d] = wfcoeff[v][w]
+
+                    
+                    alsum = 0                    
+                    for l in range(Parity,Nmax+1,2): #checks for parity
+                        for w in range(len(vec[v])):
+                            if states[v][0] != states[w][0]:
+                                continue
+                            if states[w][1] == l:
+                                alsum += states[w][3]*vec[v][w]**2 # 3 =  ms
+                    for nop in [0,1]: # neutron proton
+                        gf[nop,cur+v,Nd-d] = (gs[nop]*quench-gl[nop])*alsum + (gl[nop] - gR)*Omega +gR*(Omega+1)
+                            
+                    if Omega == 1./2:
+                        # calculate decoupling parameter in Nlmlms representation
+                        a2[cur+v,Nd-d] = 0
+                        al0sum = 0
+                        for l in range(Parity,Nmax+1,2): #checks for parity
+                            al0 = 0 # amplitudes using Nilsson's notation
+                            al1 = 0
+                            for w in range(len(vec[v])):
+                                if states[v][0] != states[w][0]: # check same N
+                                    continue
+                                if states[w][1] == l and Omega-states[w][3] == 0:
+                                    al0 = vec[v][w]
+                                    al0sum += vec[v][w]**2
+                                if states[w][1] == l and Omega-states[w][3] == 1:
+                                    al1 = vec[v][w]
+                            a2[cur+v,Nd-d] += al0**2 + 2*np.sqrt(l*(l+1))*al0*al1
+                        a2[cur+v,Nd-d] *= pow(-1,Parity)                        
+                        for nop in [0,1]: # neutron proton
+                            gf[nop,cur+v,Nd-d] += (gs[nop]*quench-gl[nop])*pow(-1,Omega+1./2+Parity)*1./2*(Omega+1./2)*al0sum**2 + \
+                                                 (gl[nop] - gR)*pow(-1,Omega+1./2)*1./2*(Omega+1./2)*a2[cur+v,Nd-d]
+
+                    for nop in [0,1]: # neutron proton
+                        gf[nop,cur+v,Nd-d] *= 1./(Omega+1)
+                        
                 lastwfcoeff = wfcoeff
                 
             #reset last coefficients
@@ -124,34 +179,72 @@ def main(argv):
                 par['delta'] = delta
                 r = runnilsson(space,states,par)
                 val = r['eValues']
+                vec = r['eVectors']
                 if r['nstates'] == 0:                   
                     continue
-                wfcoeff = wavefunction(bt,r['eVectors'])
+                
+                wfcoeff = wavefunction(bt,vec)
                 
                 for v in range(r['nstates']):
                     el[cur+v][Nd+d] = val[v]
                     # check overlap with last calculation, to avoid jumps invert vectors
                     if d > 0 and np.dot(lastwfcoeff[v],wfcoeff[v]) < np.dot(lastwfcoeff[v],-wfcoeff[v]):
                         wfcoeff[v] = -wfcoeff[v]
-                    ap[cur+v,Nd+d] = 0
+                    # calculate decoupling parameter and wave funtion in (nlj) representation
+                    ap[cur+v,Nd+d] = 0  # reset / make sure that is empty
                     for w in range(len(wfcoeff[v])):
-                        ap[cur+v,Nd+d] += pow(-1,slabels[w][2]-0.5)*(slabels[w][2]+0.5)*wfcoeff[v][w]**2
+                        ap[cur+v,Nd+d] += pow(-1,slabels[w][2]-1./2)*(slabels[w][2]+1./2)*wfcoeff[v][w]**2
                         wf[cur+v,cur+w,Nd+d] = wfcoeff[v][w]
+
+                    alsum = 0
+                    for l in range(Parity,Nmax+1,2): #checks for parity
+                        for w in range(len(vec[v])):
+                            if states[v][0] != states[w][0]:
+                                continue
+                            if states[w][1] == l:
+                                alsum += states[w][3]*vec[v][w]**2 # 3 =  ms
+                    for nop in [0,1]: # neutron proton
+                        gf[nop,cur+v,Nd+d] = (gs[nop]*quench-gl[nop])*alsum + (gl[nop] - gR)*Omega +gR*(Omega+1)
+                        
+                    if Omega == 1./2:
+                        # calculate decoupling parameter in Nlmlms representation
+                        a2[cur+v,Nd+d] = 0
+                        al0sum = 0
+                        for l in range(Parity,Nmax+1,2): #checks for parity
+                            al0 = 0 # amplitudes using Nilsson's notation
+                            al1 = 0
+                            for w in range(len(vec[v])):
+                                if states[v][0] != states[w][0]:
+                                    continue
+                                if states[w][1] == l and Omega-states[w][3] == 0:
+                                    al0 = vec[v][w]
+                                    al0sum += vec[v][w]**2
+                                if states[w][1] == l and Omega-states[w][3] == 1:
+                                    al1 = vec[v][w]
+                            a2[cur+v,Nd+d] += al0**2 + 2*np.sqrt(l*(l+1))*al0*al1
+                        a2[cur+v,Nd+d] *= pow(-1,Parity)
+                        for nop in [0,1]: # neutron proton
+                            gf[nop,cur+v,Nd+d] += (gs[nop]*quench-gl[nop])*pow(-1,Omega+1./2+Parity)*1./2*(Omega+1./2)*al0sum**2 + \
+                                                  (gl[nop] - gR)*pow(-1,Omega+1./2)*1./2*(Omega+1./2)*a2[cur+v,Nd+d]
+                            
+                    for nop in [0,1]: # neutron proton
+                        gf[nop,cur+v,Nd+d] *= 1./(Omega+1)
+                        
                 lastwfcoeff = wfcoeff
             #print wf    
             if verbose:
                 print "---------------------------"
             ctr = [0 for c in range(Nmax+1)]
-            # asymptitoc quantum numbers            
+            # asymptotic quantum numbers            
             for v in range(r['nstates']):
                 N = r['states'][v][0]
-                nz = N-ctr[N]-(Omega-0.5)
+                nz = N-ctr[N]-(Omega-1./2)
                 l = r['states'][v][1]
                 Lambda = -1
-                if (Omega - 0.5 +nz)%2 == N%2:
-                    Lambda = Omega - 0.5
-                if (Omega + 0.5 +nz)%2 == N%2:
-                    Lambda = Omega + 0.5
+                if (Omega - 1./2 +nz)%2 == N%2:
+                    Lambda = Omega - 1./2
+                if (Omega + 1./2 +nz)%2 == N%2:
+                    Lambda = Omega + 1./2
                 if verbose:
                     print "N = ", N ,", l =",  l ,", ml = ",  r['states'][v][2] ,", ms = ", r['states'][v][3] ,", v = ", v , ", nz = ", nz, ", Lamba = ", Lambda, ", Omega = ", Omega
                 nQN[cur+v] = (Omega,Parity,N,nz,Lambda)
@@ -162,10 +255,9 @@ def main(argv):
                 cur = cur + r['nstates']
  
     ## plotting    
-    
     axes = []
     plt.title("Nilsson calculation up to $N_{max} = %d$, $\kappa$ = %.2f, $\mu$ = %.2f" % (Nmax,par['kappa'],par['mu']))
-    if diagram:
+    if plotopt['diagram']:
         plt.plot([0,0],[np.min(el),np.max(el)],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
             plt.plot(deltas,el[l], ls="--" if nQN[l][1] == 1 else "-")
@@ -182,17 +274,31 @@ def main(argv):
             i = np.where(abs(deltas - d)<eps)[0]
             print el[pme][i],"\t",
 
+
+
+
+        if plotopt['gfact']:
+            axes.append(plt.subplot(2,1,1))
+            plt.title("g-factor for $%s$ level" % Nlabel(nQN[pme]))
+            #plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
+            #plt.plot([0,0],[np.min(gf[:][pme]),np.max(gf[:][pme])],ls="--",linewidth=1,color='k')
+            plt.plot(deltas,gf[0][pme])
+            plt.plot(deltas,gf[1][pme])
+            plt.ylabel('$g$')
+            axes.append(plt.subplot(2,1,2, sharex = axes[0]))
+ 
+
         # check if this is K = 1/2
-        if nQN[pme][0] == 0.5:
-            if plotdecoup:
+        if nQN[pme][0] == 1./2:
+            if plotopt['decoup']:
                 axes.append(plt.subplot(2,1,1))
                 plt.title("decoupling parameter for $%s$ level" % Nlabel(nQN[pme]))
-                plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
                 plt.plot([0,0],[np.min(ap[pme]),np.max(ap[pme])],ls="--",linewidth=1,color='k')
                 plt.plot(deltas,ap[pme])
+                plt.plot(deltas,a2[pme])
                 plt.ylabel('$a$')
                 axes.append(plt.subplot(2,1,2, sharex = axes[0]))
-                # write out to file
+                ## write out to file
                 #with open('decop.dat', 'w') as f:
                 #    writer = csv.writer(f, delimiter='\t')
                 #    writer.writerows(zip(deltas,ap[pme]))
@@ -263,8 +369,117 @@ def basistrafo(evectors):
 
 def test():
     global verbose
+    Nmax = 3
+    Omega = 3.5
+    Parity = 1
+    #verbose = True
+    space = (Nmax, Omega, Parity)
+    states = createstates(*space)
+    print states
+    par ={'kappa': 0.05, 'mu': 0.35, 'delta': 0.00}
+    h = hamiltonian(space, states, par)
+    val, vec = diagonalize(h)
+    bt = basistrafo(vec)
+
+    # determine spherical quantum numbers and ordering
+    slabels = [() for s in range(len(states))]
+    for i in range(len(states)):
+        N,l,ml,ms = states[i]
+        n = (N-l)/2+1
+        j = l + ms
+        SO = l if ms==+1./2 else -l-1
+        E = N+3./2-par['kappa']*par['mu']*(l*(l+1)- 1./2*N*(N+3))-2*par['kappa']*SO*1.0/2
+        o = int(np.where(abs(E-val)<eps)[0])
+        slabels[o] = (n,l,j,Parity)
+
+    wfcoeff = wavefunction(bt,vec)
+    for v in range(len(val)):
+        print "eigenvalue"
+        print val[v]
+        print "eigenvector"
+        print vec[v]
+    
+    print "-------------"
+    ap = [0 for _ in range(len(val))]
+    ap2 = [0 for _ in range(len(val))]
+    for v in range(len(val)):
+        for w in range(len(wfcoeff[v])):
+            ap[v] += pow(-1,slabels[w][2]-1./2)*(slabels[w][2]+1./2)*wfcoeff[v][w]**2
+
+        for w in range(len(vec[v])):
+            print '%.3f\t' %vec[v][w],
+        print "\n",
+
+        # g-factor
+        alsum = 0
+        for l in range(Parity,Nmax+1,2): #checks for parity
+            for w in range(len(vec[v])):
+                if states[v][0] != states[w][0]:
+                    continue
+                alsum += states[w][3]*vec[v][w]**2 # 3 =  ms
+        print "alsum ",alsum
+
+        # decoupling parameter
+        for l in range(Parity,Nmax+1,2): #checks for parity
+            al0 = 0
+            al1 = 0
+            print "l = ", l
+            #print "vec = ", vec[v]
+            for w in range(len(vec[v])):
+                print "States ", states[w], ", Omega-states[w][3] ", Omega-states[w][3]
+                if al0 == 0 and  states[w][1] == l and Omega-states[w][3] == 0:
+                    al0 = vec[v][w]
+                if al1 == 0 and  states[w][1] == l and Omega-states[w][3] == 1:
+                    al1 = vec[v][w]
+            print "al0 = " ,al0
+            print "al1 = " ,al1
+            ap2[v] += al0**2 + 2*np.sqrt(l*(l+1))*al0*al1
+            
+        print states[v], Omega-states[v][3]
+        #ap2[v] = pow(-1,Parity)* (vec[v][3]**2 + 2*np.sqrt(2*(2+1))*vec[v][3]*vec[v][2])
+        #print "\n",
+        
+    ap2 *= pow(-1,Parity)    
+    print ap
+    print ap2
+            
+    ## test nilsson eVal table 1
+    #Neta = -4
+    #delta = np.linspace(-0.4,0.4,200)
+    #eta = np.array([ d/par['kappa']*(1-4./3*d**2-16./27*d**3) for d in delta] )
+
+    #plt.plot(delta,eta)
+    #plt.show()
+    #print delta[np.where(abs(eta-Neta)<0.05)]
+
+
+    ##par ={'kappa': 0.05, 'mu': 0.45, 'delta': -0.2115}
+    ###par ={'kappa': 0.05, 'mu': 0.0, 'delta': -0.2115}
+    ##h = hamiltonian(space, ind, par)
+    ##val, vec = diagonalize(h)
+    ##tt0 = wavefunction(bt,vec)
+    ##
+    ##print "eigen values"
+    ##print val
+    ##print "eigen vectors"
+    ##print vec
+    ##print "wave function"
+    ##print tt0
+    ##
+    ##
+    ###print "-------------"
+    ###print vec[1]/vec[1][0]
+    ###print vec[0]/vec[0][0]
+    ##print "-------------"
+    ##print vec[5]/vec[5][4]
+    ##print vec[4]/vec[4][4]
+    ##print vec[3]/vec[3][4]
+    ##print vec[2]/vec[2][4]
+
+def testQN():
+    global verbose
     Nmax = 2
-    Omega = 0.5
+    Omega = 1./2
     Parity = 0
     verbose = True
     space = (Nmax, Omega, Parity)
@@ -310,7 +525,7 @@ def test():
     #print tt[3]*vec[3]
 def testbasis():
     Nmax = 1
-    Omega = 0.5
+    Omega = 1./2
     Parity = 1
 
     space = (Nmax, Omega, Parity)
@@ -372,23 +587,6 @@ def testbasis():
     print np.dot(tt0[1],tt[1])
     print np.dot(tt0[1],-tt[1])
 
-    
-#    nz = [-1 for r in range(len(ind))]
-#    Lambda = [-1 for r in range(len(ind))]
-#    ctr = [0 for r in range(len(ind))]
-#    print ctr
-#    for v in range(len(ind)):
-#        N = ind[v][0]
-#        nz[v] = N-ctr[N]
-#        print Omega - 0.5, Omega + 0.5
-#        if (Omega - 0.5 +nz[v])%2 == N%2:
-#            Lambda[v] = Omega - 0.5
-#        if (Omega + 0.5 +nz[v])%2 == N%2:
-#            Lambda[v] = Omega + 0.5
-#        #label[cur+v] = "%d/2^{%s}[%d,%d,%d]" % (Omega*2,parities[Parity],N,nz,Lambda)
-#        #QN[cur+v] = (Omega,Parity,N,nz,Lambda, j)
-#        print "N = ", N ,", l =",  ind[v][1] ,", ml = ",  ind[v][2] ,", ms = ", ind[v][3] ,", v = ", v, ", nz = ", nz[v], ", Lamba = ", Lambda[v], ", Omega = ", Omega, ", E = ", val[v]
-#        ctr[N] = ctr[N] +1
         
 def hamiltonian(space, index, pars):
     
@@ -469,6 +667,9 @@ def rhoY20(N,l,ml,ms,N2,l2,ml2,ms2):
         return 0
     if not (N==N2 or abs(N-N2)==2):
         return 0
+    # option to include the DeltaN=2 admixtures
+    if not DeltaN2 and N!=N2: 
+        return 0
     if not (l==l2 or abs(l-l2)==2):
         return 0
     return r2(N,l,N2,l2) * Y20(l,ml,l2,ml2)
@@ -500,7 +701,7 @@ def createstates(n_max,omega,parity):
     for n in range(parity,n_max+1,2):
         for l in range(parity,n+1,2): #checks for parity
             for ml in range(-l,l+1): 
-                for ms in [-0.5,0.5]: #ms
+                for ms in [-1./2,+1./2]: #ms
                     if omega==ml+ms:
                         index[(n,l,ml,ms)] = ctr
                         ctr = ctr+1
@@ -519,10 +720,8 @@ def diagonalize(ham):
         print "eValues\n", eValues
         print "eVectors\n", eVectors
         print "eVectors^T\n", np.transpose(eVectors)
-    # eigenvectors are columns
+    # eigenvectors are columns, therefore transpose
     return eValues, np.transpose(eVectors)
         
 if __name__ == "__main__":
    main(sys.argv[1:])
-
-    
