@@ -10,27 +10,32 @@ import matplotlib.pyplot as plt
 # debugging and plotting options
 verbose = False # Frue #
 diagram = True # False #
-DeltaN2 = True # False #
+DeltaN2 = False # True # 
 
 # constants
 ell = ["s","p","d","f","g","h","i","j"]
 parities = ["+","-"]
 eps = 0.001 # tolerance for energy matching
+
 # g factors free proton, neutron
-quench = 0.9
 gs = [5.585694, -3.826085]
 gl = [1.0     ,  0.0     ]
+# quenching for g-factor
+quench = 0.9
 
+# rotational g-factor
 gR = 16./44
 
 # todo:
 # FIXED - spherical quantum numbers are wrong
 # FIXED - calculate decoupling parameters, needs j
-# - calculate magnitc moments, g-factors
+# FIXED - calculate magnitc moments, g-factors
 # - calculate spectroscopic factors
+# - g-factor for states with not Omega = K = J
 # - parameters change as function of N, not nexcessarly Nmax, how to deal with this
 # - parameters, states and space are returned by runnilsson, but that is not required if the space is part of input
 # - commandline interface
+# - separate pltting function
 
 def main(argv):
     global verbose
@@ -43,7 +48,7 @@ def main(argv):
         return
     print argv
     Nmax = int(argv[0])
-    plotopt = {'diagram': True, 'decoup': False, 'gfact': False}
+    plotopt = {'diagram': True, 'decoup': False, 'gfact': False, 'sfact': False}
     
     if len(argv)>1:
         if argv[1] == "D" or argv[1] == "d":
@@ -55,6 +60,8 @@ def main(argv):
                 plotopt['decoup'] = True
             if len(argv)>2 and (argv[2] == "G" or argv[2] == "g"):
                 plotopt['gfact'] = True
+            if len(argv)>2 and (argv[2] == "S" or argv[2] == "s"):
+                plotopt['sfact'] = True
 
     ## basic model space and parameters
     Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
@@ -63,7 +70,7 @@ def main(argv):
     par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
 
     #options for the nillson diagram
-    diaopt = {'maxd': 0.3, 'Nd': 30}
+    diaopt = {'maxd': 0.4, 'Nd': 40}
     Nd = diaopt['Nd']
     deltas = np.linspace(-diaopt['maxd'],diaopt['maxd'],num=diaopt['Nd']*2+1,endpoint=True)
 
@@ -264,19 +271,37 @@ def main(argv):
             plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'left')
             plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'right')
         plt.ylabel('$E/\hbar\omega$')
+
+
+    elif plotopt['sfact']:
+        plt.title("spectroscopic factors for $%s$ level" % Nlabel(nQN[pme]))
+        print "delta "
+        for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+            print "%.3f\t" % d,
+        print '\nspectroscopic factors'
+        for l in range(Nlev):
+            if max(wf[pme][l]) > 0 or min(wf[pme][l]) < 0:
+                sf = np.array([ ( w * CG(0,0, sQN[l][2],nQN[pme][0], sQN[l][2],nQN[pme][0]) )**2 *2  for w in wf[pme][l] ])
+                plt.plot(deltas,sf)
+                plt.text(deltas[-1]+0.02,sf[-1],"$%s$" % (Slabel(sQN[l])), ha = 'left')
+                plt.text(deltas[0]-0.02,sf[0],"$%s$" % (Slabel(sQN[l])), ha = 'right')
+                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                    i = np.where(abs(deltas - d)<eps)[0]
+                    print "%.4f\t" % sf[i],
+                print Slabel(sQN[l])
+        plt.ylabel('$C^2S$')
+        
     else:
         print "Nilsson level", Nlabel(nQN[pme])
         print "delta "
-        for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
-            print d,"\t\t",
+        for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+            print "%.3f\t" % d,
         print "\nenergies:"
-        for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+        for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
             i = np.where(abs(deltas - d)<eps)[0]
-            print el[pme][i],"\t",
+            print "%.4f\t" % el[pme][i],
 
-
-
-
+   
         if plotopt['gfact']:
             axes.append(plt.subplot(2,1,1))
             plt.title("g-factor for $%s$ level" % Nlabel(nQN[pme]))
@@ -304,10 +329,10 @@ def main(argv):
                 #    writer.writerows(zip(deltas,ap[pme]))
                 
             print "\ndecouling parameter"
-            for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
                 i = np.where(abs(deltas - d)<eps)[0]
-                print ap[pme][i],"\t",
-     
+                print "%.4f\t" % ap[pme][i],
+            
         plt.title("wave function composition for $%s$ level" % Nlabel(nQN[pme]))
         print '\nwave funtion composition'
         plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
@@ -317,9 +342,9 @@ def main(argv):
                 plt.plot(deltas,wf[pme][l])
                 plt.text(deltas[-1]+0.02,wf[pme][l][-1],"$%s$" % (Slabel(sQN[l])), ha = 'left')
                 plt.text(deltas[0]-0.02,wf[pme][l][0],"$%s$" % (Slabel(sQN[l])), ha = 'right')
-                for d in [-0.30,-0.20,-0.10,0.00,0.10,0.20,0.30]:
+                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
                     i = np.where(abs(deltas - d)<eps)[0]
-                    print wf[pme][l][i],"\t",
+                    print "%.4f\t" % wf[pme][l][i],
                 print Slabel(sQN[l])
         plt.ylabel('$C_{\Omega j}$')
                 
