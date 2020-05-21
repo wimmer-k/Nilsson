@@ -1,4 +1,3 @@
-
 class Memoize:
     def __init__(self, fn):
         self.fn = fn
@@ -6,5 +5,5 @@ class Memoize:
 
     def __call__(self, *args):
         if args not in self.memo:
-	    self.memo[args] = self.fn(*args)
+            self.memo[args] = self.fn(*args)
         return self.memo[args]
