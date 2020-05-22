@@ -9,6 +9,7 @@ verbose = False # True #
 defaultmu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
 class Nilsson(object):
     def __init__(self,*args,**kwargs):
+        self.Nmin = kwargs.get('Nmin',0)
         self.Nmax = kwargs.get('Nmax',3)
         self.Omega = kwargs.get('Omega',1.5)
         self.Parity = kwargs.get('Parity',1)
@@ -18,18 +19,21 @@ class Nilsson(object):
         self.states = self.createstates()
         self.par ={'kappa': 0.05, 'mu': defaultmu[self.Nmax], 'delta': 0.0}
                 
-    # creates all states until Nmax with a certain Omega and Parity
+    """ creates all states until Nmax with a certain Omega and Parity """
     def createstates(self):
         states =[]
-        ctr = 0
+        if self.Nmin % 2 == 0:
+            Nsta = self.Nmin+self.Parity
+        else:
+            Nsta = self.Nmin+(1-self.Parity)
+            
         # 0,2,4... for positive parity, 1,3,5,... for negative
-        for n in range(self.Parity,self.Nmax+1,2):
+        for n in range(Nsta,self.Nmax+1,2):
             for l in range(self.Parity,n+1,2): #checks for parity
                 for ml in range(-l,l+1): 
                     for ms in [-1./2,+1./2]: #ms
                         if self.Omega==ml+ms:
                             states.append((n,l,ml,ms))
-                            ctr = ctr+1
         return states
 
     def setparameters(self,*args,**kwargs):
@@ -38,14 +42,14 @@ class Nilsson(object):
         self.par['mu'] = kwargs.get('mu',defaultmu[self.Nmax])
         self.par['delta'] = kwargs.get('delta',0.3)
 
-    # calculate the eigenvalues and vectors for a set of parameters, input model space
+    """ calculate the eigenvalues and vectors for a set of parameters, input model space """
     def calculate(self,delta):
         self.par['delta'] = delta
         h = self.hamiltonian()
         val, vec = self.diagonalize(h)
         return val, vec
 
-    # create the Hamiltonian matrix 
+    """ create the Hamiltonian matrix """
     def hamiltonian(self):
     
         nmax = self.Nmax

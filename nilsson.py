@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # for consistent print in python 2 and 3
 from __future__ import print_function
-import sys, getopt
+import sys
 import math
 import numpy as np
 from memoize import Memoize
 from wigner import CG
 from hamiltonian import Nilsson
 import matplotlib.pyplot as plt
+import argparse
 #import csv
+
+version = "0.2/2020.05.22"
 
 # debugging and plotting options
 verbose = False # True # 
@@ -41,62 +44,81 @@ gR = 16./44
 # DONE - test with python 3
 # - separate plotting function
 # DONE - put calculation into separate class
+# DONE option to calculate only a range of N = [Nmin,Nmax]
 # - if not the whole diagram is needed calculate only the states of this Omega and parity
+# - option to change kappa and mu from standard values.
+# - output g_K instead / in addition
+# - in the option to calculate a, also output the magnetic decoupling b
 
 def main(argv):
     global verbose
 
     # defaults
+    Nmin = 3
     Nmax = 3
     plotorb = -1
-    plotopt = {'diagram': True, 'decoup': False, 'gfact': False, 'sfact': False}
+    plotopt = {'diagram': True, 'wavef': False, 'decoup': False, 'gfact': False, 'sfact': False}
     
-    ## read commandline arguments
-    try:
-        opts, args = getopt.getopt(argv,"hv:N:o:p:t",["Nmax=","orbit=","pplot=","test"])
-    except getopt.GetoptError:
-        print('usage: nilsson.py -N <N_max> -o <orbital> -p <property to plot>' )
-        sys.exit(2)
+    argparser = argparse.ArgumentParser(description='Calculation of Nilsson diagrams and wave functions.', add_help=False)
+    requiredargs = argparser.add_argument_group('required arguments')
+    requiredargs.add_argument("-N", "--nosc", required=True,nargs="+",dest="Nosc",type=int,help="oscillator shell N, or a range of oscillator shells Nmin Mmax, e.g. -N 3 or -N 1 3", metavar='')
 
-    for opt, arg in opts:
-        if opt == '-h':
-            print('usage: nilsson.py -N <N_max> -o <orbital> -p <property to plot>')
-            sys.exit()
-        elif opt == '-v':
-            verbose = TRUE
-        elif opt =="-t":
-            print("testing calculation")
-            test()
-            sys.exit()            
-        elif opt in ("-N", "--Nmax"):
-            Nmax = int(arg)
-        elif opt in ("-o", "--orbit"):
-            plotopt['diagram'] = False
-            plotorb = int(arg)
-        elif opt in ("-p", "--pplot"):
-            if plotorb == -1:
-                print('need number or orbital to be plotted')
-                print('usage: nilsson.py -N <N_max> -o <orbital> -p <property to plot>')
-                sys.exit() 
-            if arg in ("decoup","a","A"):
+    argparser.add_argument("-o", "--orbital", dest="orb", type=int,help="number of orbital to be plotted", metavar='',default=-1)
+    argparser.add_argument("-p", "--property", dest="prop",
+                           choices=['wavef','wf','decoup','a', 'gfactor','gfact','g', 'sfactor','sfact','s'], metavar='',
+                           help="which property should be plotted. The options are wave function: \"wavef\" or \"wf\", decoupling parameter: \"decoup\" or \"a\", g-factor: \"gfactor\", \"gfact\", or \"g\", spectroscopic factors: \"sfactor\", \"sfact\", or \"s\"")
+
+
+    argparser.add_argument("-h", "--help", action="help", help="show this help message and exit")
+    argparser.add_argument("-t", "--test", help="excute testing functions", action="store_true")
+    argparser.add_argument("-v", "--verbose", help="verbose output", action="store_true")
+    argparser.add_argument('--version', action='version', version=version)
+    
+
+    argparser._action_groups.reverse()
+    
+    args = argparser.parse_args()
+
+    if not (1<=len(args.Nosc)<=2):
+        raise argparser.error("-N expects one or two values, oscillator shell N, or range of oscillator shells -N 3 or -N 1 3")
+
+    if args.verbose:
+        verbose = TRUE
+    if args.test:
+        print("test calculation")
+        test()
+        sys.exit()            
+    if len(args.Nosc) == 1:
+        Nmin = args.Nosc[0]
+        Nmax = args.Nosc[0]
+        print("calculation for N = %d" % Nmax)
+    if len(args.Nosc) == 2:
+        Nmin = min(args.Nosc)
+        Nmax = max(args.Nosc)
+        print("calculation for N = [%d,%d]" % (Nmin, Nmax))
+    if args.orb > -1:
+        plotopt['diagram'] = False
+        plotorb = args.orb
+        if args.prop:
+            if args.prop in ("wf","wf"):
+                plotopt['wavef'] = True
+            if args.prop in ("decoup","a"):
                 plotopt['decoup'] = True
-            elif arg in ("gfact","g","G"):
+            if args.prop in ("gfactor","gfact","g"):
                 plotopt['gfact'] = True
-            elif arg in ("sfact","s","S"):
+            if args.prop in ("sfactor","sfact","s"):
                 plotopt['sfact'] = True
-            else:
-                print('plotting options are:')
-                print('\"decoup\", \"a\", or \"A\" for the decoupling parameter')
-                print('\"gfact\", \"g\", or \"G\" for the g-factor')
-                print('\"sfact\", \"s\", or \"S\" for the spectroscopic factors')
-                sys.exit()
-                
+    elif args.prop:
+        raise argparser.error("-p/--property needs to specify which orbit, e.g. \" -o 3 \"")
     np.set_printoptions(linewidth=300)
 
 
     ## basic model space and parameters
-    Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3
+    Nnuc = (Nmax+1)*(Nmax+2)*(Nmax+3)/3 - (Nmin-1+1)*(Nmin-1+2)*(Nmin-1+3)/3
     Nlev = int(Nnuc/2)
+    print("number of Nilsson levels:", Nlev)
+    if plotorb >= Nlev:
+        raise argparser.error("invalid orbit selected, number of Nilsson levels = %d, cannot plot orbit orb = %d (0<=orb<N)" % (Nlev,plotorb))
     mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
     par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
 
@@ -124,7 +146,7 @@ def main(argv):
             if verbose:
                 print("Parity ", Parity)
 
-            nilsson = Nilsson(Nmax = Nmax, Omega = Omega, Parity = Parity, Verbose=verbose)
+            nilsson = Nilsson(Nmin = Nmin, Nmax = Nmax, Omega = Omega, Parity = Parity, Verbose=verbose)
             nilsson.setparameters(*par)
             nstates = len(nilsson.states)
             states = nilsson.states
@@ -282,7 +304,10 @@ def main(argv):
  
     ## plotting    
     axes = []
-    plt.title("Nilsson calculation up to $N_{max} = %d$, $\kappa$ = %.2f, $\mu$ = %.2f" % (Nmax,par['kappa'],par['mu']))
+    if Nmin == Nmax:
+        plt.title("Nilsson calculation for $N = %d$, $\kappa$ = %.2f, $\mu$ = %.2f" % (Nmax,par['kappa'],par['mu']))
+    else:
+        plt.title("Nilsson calculation $N = [%d,%d]$, $\kappa$ = %.2f, $\mu$ = %.2f" % (Nmin,Nmax,par['kappa'],par['mu']))
     if plotopt['diagram']:
         plt.plot([0,0],[np.min(el),np.max(el)],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
@@ -392,7 +417,8 @@ def Slabel(QN):
     n, l, j, Parity = QN
     return "%d%s%d/2^{%s}" % (n,ell[l],2*j,parities[Parity])
             
-
+def test():
+    print("testing nothing")
         
 if __name__ == "__main__":
    main(sys.argv[1:])
