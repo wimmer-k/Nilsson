@@ -104,7 +104,7 @@ def main(argv):
         Nmin = min(args.Nosc)
         Nmax = max(args.Nosc)
         print("calculation for N = [%d,%d]" % (Nmin, Nmax))
-    if args.orb > -1:
+    if args.orb:
         plotopt['diagram'] = False
         plotorb = args.orb
         if args.prop:
