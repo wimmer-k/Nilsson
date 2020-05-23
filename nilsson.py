@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 # for consistent print in python 2 and 3
 from __future__ import print_function
 import sys
@@ -58,6 +58,11 @@ def main(argv):
     Nmax = 3
     plotorb = -1
     plotopt = {'diagram': True, 'wavef': False, 'decoup': False, 'gfact': False, 'sfact': False}
+    kappa = 0.05
+    mu = 0.35
+    ranged = 0.4
+    Nd = 40
+
     
     argparser = argparse.ArgumentParser(description='Calculation of Nilsson diagrams and wave functions.', add_help=False)
     requiredargs = argparser.add_argument_group('required arguments')
@@ -67,6 +72,8 @@ def main(argv):
     argparser.add_argument("-p", "--property", dest="prop",
                            choices=['wavef','wf','decoup','a', 'gfactor','gfact','g', 'sfactor','sfact','s'], metavar='',
                            help="which property should be plotted. The options are wave function: \"wavef\" or \"wf\", decoupling parameter: \"decoup\" or \"a\", g-factor: \"gfactor\", \"gfact\", or \"g\", spectroscopic factors: \"sfactor\", \"sfact\", or \"s\"")
+    argparser.add_argument("-Nd","--ndelta", dest="Nd", type=int,help="number of steps in delta, typical value is 40", metavar='')
+    argparser.add_argument("-r","--ranged", dest="ranged", type=float,help="range of delta values [-ranged,ranged], typical value is 0.4", metavar='')
 
 
     argparser.add_argument("-h", "--help", action="help", help="show this help message and exit")
@@ -79,15 +86,16 @@ def main(argv):
     
     args = argparser.parse_args()
 
-    if not (1<=len(args.Nosc)<=2):
-        raise argparser.error("-N expects one or two values, oscillator shell N, or range of oscillator shells -N 3 or -N 1 3")
-
-    if args.verbose:
-        verbose = TRUE
     if args.test:
         print("test calculation")
         test()
         sys.exit()            
+
+    if not (1<=len(args.Nosc)<=2):
+        raise argparser.error("-N expects one or two values, oscillator shell N, or range of oscillator shells -N 3 or -N 1 3")
+    
+    if args.verbose:
+        verbose = TRUE
     if len(args.Nosc) == 1:
         Nmin = args.Nosc[0]
         Nmax = args.Nosc[0]
@@ -108,8 +116,20 @@ def main(argv):
                 plotopt['gfact'] = True
             if args.prop in ("sfactor","sfact","s"):
                 plotopt['sfact'] = True
-    elif args.prop:
+    elif args.prop is not None:
         raise argparser.error("-p/--property needs to specify which orbit, e.g. \" -o 3 \"")
+
+    if args.Nd is not None:
+        if args.Nd < 1:
+            raise argparser.error("-Nd/--ndelta must be 1 or larger, typically around 40")
+        else:
+            Nd = args.Nd
+    if args.ranged is not None:
+        if args.ranged < 0:
+            raise argparser.error("-r/--ranged must be positive, typically around 0.4")
+        else:
+            ranged = args.ranged
+    print("%d steps in delta in [%.2f,%.2f]"%(Nd,ranged,ranged))
     np.set_printoptions(linewidth=300)
 
 
@@ -123,9 +143,9 @@ def main(argv):
     par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
 
     #options for the nillson diagram
-    diaopt = {'maxd': 0.4, 'Nd': 40}
+    diaopt = {'mind': -ranged, 'maxd': ranged, 'Nd': Nd}
     Nd = int(diaopt['Nd'])
-    deltas = np.linspace(-diaopt['maxd'],diaopt['maxd'],num=diaopt['Nd']*2+1,endpoint=True)
+    deltas = np.linspace(diaopt['mind'],diaopt['maxd'],num=diaopt['Nd']*2+1,endpoint=True)
 
     #storage containers for el = energy levels, wf = wave functions, ap = decoupling parameter
     el = np.zeros((Nlev,Nd*2+1))
@@ -337,13 +357,15 @@ def main(argv):
         
     else:
         print("Nilsson level", Nlabel(nQN[plotorb]))
-        print("delta ")
-        for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-            print("%.3f\t" % d,end="")
-        print("\nenergies:")
-        for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-            i = np.where(abs(deltas - d)<eps)[0]
-            print("%.4f\t" % el[plotorb][i],end="")
+
+        if Nd==40 and ranged == 0.4:
+            print("delta ")
+            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                print("%.3f\t" % d,end="")
+            print("\nenergies:")
+            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                i = np.where(abs(deltas - d)<eps)[0]
+                print("%.4f\t" % el[plotorb][i],end="")
 
    
         if plotopt['gfact']:
@@ -357,15 +379,16 @@ def main(argv):
             plt.text(deltas[0]-0.02,gf[1][plotorb][0],"neutron", ha = 'right')
             plt.ylabel('$g$')
             axes.append(plt.subplot(2,1,2, sharex = axes[0]))
-            print("\ng-factor parameter")
-            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-                i = np.where(abs(deltas - d)<eps)[0]
-                print("%.4f\t" % gf[0][plotorb][i],end="")
-            print("proton")
-            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-                i = np.where(abs(deltas - d)<eps)[0]
-                print("%.4f\t" % gf[1][plotorb][i],end="")
-            print("neutron")
+            if Nd==40 and ranged == 0.4:
+                print("\ng-factor parameter")
+                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                    i = np.where(abs(deltas - d)<eps)[0]
+                    print("%.4f\t" % gf[0][plotorb][i],end="")
+                print("proton")
+                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                    i = np.where(abs(deltas - d)<eps)[0]
+                    print("%.4f\t" % gf[1][plotorb][i],end="")
+                print("neutron")
 
         # check if this is K = 1/2
         if nQN[plotorb][0] == 1./2:
@@ -382,13 +405,15 @@ def main(argv):
                 #    writer = csv.writer(f, delimiter='\t')
                 #    writer.writerows(zip(deltas,ap[plotorb]))
                 
-            print("decouling parameter")
-            for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-                i = np.where(abs(deltas - d)<eps)[0]
-                print("%.4f\t" % ap[plotorb][i],end="")
+            if Nd==40 and ranged == 0.4:
+                print("\ndecouling parameter")
+                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                    i = np.where(abs(deltas - d)<eps)[0]
+                    print("%.4f\t" % ap[plotorb][i],end="")
             
         plt.title("wave function composition for $%s$ level" % Nlabel(nQN[plotorb]))
-        print('\nwave funtion composition')
+        if Nd==40 and ranged == 0.4:
+            print('\nwave funtion composition')
         plt.plot([deltas[0]-0.2,deltas[-1]+0.2],[0,0],ls="--",linewidth=1,color='k')
         plt.plot([0,0],[np.min(wf[plotorb]),np.max(wf[plotorb])],ls="--",linewidth=1,color='k')
         for l in range(Nlev):
@@ -396,10 +421,11 @@ def main(argv):
                 plt.plot(deltas,wf[plotorb][l])
                 plt.text(deltas[-1]+0.02,wf[plotorb][l][-1],"$%s$" % (Slabel(sQN[l])), ha = 'left')
                 plt.text(deltas[0]-0.02,wf[plotorb][l][0],"$%s$" % (Slabel(sQN[l])), ha = 'right')
-                for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
-                    i = np.where(abs(deltas - d)<eps)[0]
-                    print("%.4f\t" % wf[plotorb][l][i],end="")
-                print(Slabel(sQN[l]))
+                if Nd==40 and ranged == 0.4:
+                    for d in np.linspace(-0.4,0.4,num=9, endpoint=True):
+                        i = np.where(abs(deltas - d)<eps)[0]
+                        print("%.4f\t" % wf[plotorb][l][i],end="")
+                    print(Slabel(sQN[l]))
         plt.ylabel('$C_{\Omega j}$')
                 
     plt.xlabel('$\delta$')
