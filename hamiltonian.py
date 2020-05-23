@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # for consistent print in python 2 and 3
 from __future__ import print_function
 from memoize import Memoize
@@ -18,7 +17,7 @@ class Nilsson(object):
         self.Verbose = kwargs.get('Verbose',False)
         self.states = self.createstates()
         self.par ={'kappa': 0.05, 'mu': defaultmu[self.Nmax], 'delta': 0.0}
-                
+        
     """ creates all states until Nmax with a certain Omega and Parity """
     def createstates(self):
         states =[]

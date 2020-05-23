@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # for consistent print in python 2 and 3
 from __future__ import print_function
 import sys
@@ -13,9 +13,6 @@ import argparse
 
 version = "0.2/2020.05.22"
 
-# debugging and plotting options
-verbose = False # True # 
-diagram = True # False #
 DeltaN2 = True # False # 
 
 # constants
@@ -46,14 +43,16 @@ gR = 16./44
 # DONE - put calculation into separate class
 # DONE option to calculate only a range of N = [Nmin,Nmax]
 # - if not the whole diagram is needed calculate only the states of this Omega and parity
-# - option to change kappa and mu from standard values.
+# DONE option to change kappa and mu from standard values.
 # - output g_K instead / in addition
 # - in the option to calculate a, also output the magnetic decoupling b
 
 def main(argv):
-    global verbose
-
+    
+    np.set_printoptions(linewidth=300)
+    
     # defaults
+    verbose = False
     Nmin = 3
     Nmax = 3
     plotorb = -1
@@ -62,19 +61,20 @@ def main(argv):
     mu = 0.35
     ranged = 0.4
     Nd = 40
-
+    kappa = 0.05
+    mu = -1
     
     argparser = argparse.ArgumentParser(description='Calculation of Nilsson diagrams and wave functions.', add_help=False)
     requiredargs = argparser.add_argument_group('required arguments')
-    requiredargs.add_argument("-N", "--nosc", required=True,nargs="+",dest="Nosc",type=int,help="oscillator shell N, or a range of oscillator shells Nmin Mmax, e.g. -N 3 or -N 1 3", metavar='')
+    requiredargs.add_argument("-N", "-n", "--nosc", required=True,nargs="+",dest="Nosc",type=int,help="oscillator shell N, or a range of oscillator shells Nmin Mmax, e.g. -N 3 or -N 1 3")
 
-    argparser.add_argument("-o", "--orbital", dest="orb", type=int,help="number of orbital to be plotted", metavar='',default=-1)
-    argparser.add_argument("-p", "--property", dest="prop",
-                           choices=['wavef','wf','decoup','a', 'gfactor','gfact','g', 'sfactor','sfact','s'], metavar='',
-                           help="which property should be plotted. The options are wave function: \"wavef\" or \"wf\", decoupling parameter: \"decoup\" or \"a\", g-factor: \"gfactor\", \"gfact\", or \"g\", spectroscopic factors: \"sfactor\", \"sfact\", or \"s\"")
-    argparser.add_argument("-Nd","--ndelta", dest="Nd", type=int,help="number of steps in delta, typical value is 40", metavar='')
-    argparser.add_argument("-r","--ranged", dest="ranged", type=float,help="range of delta values [-ranged,ranged], typical value is 0.4", metavar='')
-
+    argparser.add_argument("-o", "--orbital", dest="orb", type=int,help="number of orbital to be plotted")
+    argparser.add_argument("-p", "--property", dest="prop", choices=['wavef','wf','decoup','a', 'gfactor','gfact','g', 'sfactor','sfact','s'], help="which property should be plotted. The options are wave function: \"wavef\" or \"wf\", decoupling parameter: \"decoup\" or \"a\", g-factor: \"gfactor\", \"gfact\", or \"g\", spectroscopic factors: \"sfactor\", \"sfact\", or \"s\"")
+    
+    argparser.add_argument("-k","--kappa", dest="kappa", type=float,help="kappa value for the energy calculations, default value is 0.05")
+    argparser.add_argument("-m","--mu", dest="mu", type=float,help="mu value for the energy calculations, default value depend on the value of N")
+    argparser.add_argument("-Nd","--ndelta", dest="Nd", type=int,help="number of steps in delta, typical value is 40")
+    argparser.add_argument("-r","--ranged", dest="ranged", type=float,help="range of delta values [-ranged,ranged], typical value is 0.4")
 
     argparser.add_argument("-h", "--help", action="help", help="show this help message and exit")
     argparser.add_argument("-t", "--test", help="excute testing functions", action="store_true")
@@ -129,8 +129,19 @@ def main(argv):
             raise argparser.error("-r/--ranged must be positive, typically around 0.4")
         else:
             ranged = args.ranged
+    if args.kappa is not None:
+        if args.kappa < 0:
+            raise argparser.error("-k/--kappa must be positive, default value is 0.05")
+        else:
+            kappa = args.kappa
+    if args.mu is not None:
+        if args.mu < 0:
+            raise argparser.error("-m/--mu must be 0 or positive, default value is between 0 and 0.45 depending on the shell")
+        else:
+            mu = args.mu
+    
     print("%d steps in delta in [%.2f,%.2f]"%(Nd,ranged,ranged))
-    np.set_printoptions(linewidth=300)
+    
 
 
     ## basic model space and parameters
@@ -139,9 +150,12 @@ def main(argv):
     print("number of Nilsson levels:", Nlev)
     if plotorb >= Nlev:
         raise argparser.error("invalid orbit selected, number of Nilsson levels = %d, cannot plot orbit orb = %d (0<=orb<N)" % (Nlev,plotorb))
-    mu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
-    par ={'kappa': 0.05, 'mu': mu[Nmax], 'delta': 0.0}
-
+    muN = [0,0,0,0.35,0.45,0.45,0.45,0.40]
+    par ={'kappa': kappa, 'mu': muN[Nmax], 'delta': 0.0}
+    if mu != -1:
+        par['mu'] = mu
+    print("kappa = %.3f, mu = %.3f" %(par['kappa'],par['mu']))
+    
     #options for the nillson diagram
     diaopt = {'mind': -ranged, 'maxd': ranged, 'Nd': Nd}
     Nd = int(diaopt['Nd'])
@@ -167,12 +181,12 @@ def main(argv):
                 print("Parity ", Parity)
 
             nilsson = Nilsson(Nmin = Nmin, Nmax = Nmax, Omega = Omega, Parity = Parity, Verbose=verbose)
-            nilsson.setparameters(*par)
+            nilsson.setparameters(**par)
             nstates = len(nilsson.states)
             states = nilsson.states
             if nstates < 1:
                 continue
-        
+            
             # determine basis transformation matrix from spherical calculation
             spval, spvect = nilsson.calculate(0.0)
             bt = nilsson.basistrafo(spvect)

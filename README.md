@@ -59,4 +59,8 @@ The range and number of delta values can be changed with the options "-Nd" and "
 ./nilsson.py -N 2 -Nd 10 -r 0.5
 ```
 
+As defaul the calulation is performed with standard values for kappa and mu, which are reproducing the usual ordering and spacing of level for delta=0. In order to change the values for kappa and mu use the argmuments "-k" or "--kappa" and "-m" or "--mu".
 
+```
+./nilsson.py -N 3 -k 0.04 -m 0.55
+```
