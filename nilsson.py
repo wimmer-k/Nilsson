@@ -4,12 +4,11 @@ from __future__ import print_function
 import sys
 import math
 import numpy as np
-from memoize import Memoize
 from wigner import CG
 from hamiltonian import Nilsson
 import matplotlib.pyplot as plt
 import argparse
-#import csv
+import csv
 
 version = "0.2/2020.05.22"
 
@@ -42,7 +41,7 @@ gR = 16./44
 # - separate plotting function
 # DONE - put calculation into separate class
 # DONE option to calculate only a range of N = [Nmin,Nmax]
-# - if not the whole diagram is needed calculate only the states of this Omega and parity
+# - if not the whole diagram is needed calculate only the states of this Omega and parity (for gui the wave function is stored.)
 # DONE option to change kappa and mu from standard values.
 # - output g_K instead / in addition
 # - in the option to calculate a, also output the magnetic decoupling b
@@ -57,8 +56,6 @@ def main(argv):
     Nmax = 3
     plotorb = -1
     plotopt = {'diagram': True, 'wavef': False, 'decoup': False, 'gfact': False, 'sfact': False}
-    kappa = 0.05
-    mu = 0.35
     ranged = 0.4
     Nd = 40
     kappa = 0.05
@@ -104,7 +101,7 @@ def main(argv):
         Nmin = min(args.Nosc)
         Nmax = max(args.Nosc)
         print("calculation for N = [%d,%d]" % (Nmin, Nmax))
-    if args.orb:
+    if args.orb and args.orb > -1:
         plotopt['diagram'] = False
         plotorb = args.orb
         if args.prop:
@@ -187,12 +184,12 @@ def main(argv):
             if nstates < 1:
                 continue
             
-            # determine basis transformation matrix from spherical calculation
+            """ determine basis transformation matrix from spherical calculation """
             spval, spvect = nilsson.calculate(0.0)
             bt = nilsson.basistrafo(spvect)
             lastwfcoeff = nilsson.wavefunction(bt,spvect)
 
-            # determine spherical quantum numbers and ordering
+            """ determine spherical quantum numbers and ordering """
             slabels = [() for s in range(nstates)]
             for i in range(nstates):
                 N,l,ml,ms = states[i]
@@ -349,7 +346,11 @@ def main(argv):
             plt.text(deltas[-1]+0.02,el[l][-1],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'left')
             plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'right')
         plt.ylabel('$E/\hbar\omega$')
-
+        ## write out to file
+        with open('energies.dat', 'w') as f:
+            writer = csv.writer(f, delimiter='\t')
+            writer.writerows(zip(deltas,el))
+ 
 
     elif plotopt['sfact']:
         plt.title("spectroscopic factors for $%s$ level" % Nlabel(nQN[plotorb]))
