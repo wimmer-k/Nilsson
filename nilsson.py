@@ -8,7 +8,6 @@ from wigner import CG
 from hamiltonian import Nilsson
 import matplotlib.pyplot as plt
 import argparse
-import csv
 
 version = "0.2/2020.05.22"
 
@@ -60,6 +59,7 @@ def main(argv):
     Nd = 40
     kappa = 0.05
     mu = -1
+    savefilepath = None
     
     argparser = argparse.ArgumentParser(description='Calculation of Nilsson diagrams and wave functions.', add_help=False)
     requiredargs = argparser.add_argument_group('required arguments')
@@ -72,6 +72,7 @@ def main(argv):
     argparser.add_argument("-m","--mu", dest="mu", type=float,help="mu value for the energy calculations, default value depend on the value of N")
     argparser.add_argument("-Nd","--ndelta", dest="Nd", type=int,help="number of steps in delta, typical value is 40")
     argparser.add_argument("-r","--ranged", dest="ranged", type=float,help="range of delta values [-ranged,ranged], typical value is 0.4")
+    argparser.add_argument("-w","--write", dest="write", type=str,help="write the calculation to output file")
 
     argparser.add_argument("-h", "--help", action="help", help="show this help message and exit")
     argparser.add_argument("-t", "--test", help="excute testing functions", action="store_true")
@@ -101,7 +102,7 @@ def main(argv):
         Nmin = min(args.Nosc)
         Nmax = max(args.Nosc)
         print("calculation for N = [%d,%d]" % (Nmin, Nmax))
-    if args.orb and args.orb > -1:
+    if args.orb is not None and args.orb > -1:
         plotopt['diagram'] = False
         plotorb = args.orb
         if args.prop:
@@ -136,6 +137,10 @@ def main(argv):
             raise argparser.error("-m/--mu must be 0 or positive, default value is between 0 and 0.45 depending on the shell")
         else:
             mu = args.mu
+
+    if args.write is not None:
+        savefilepath = args.write
+    
     
     print("%d steps in delta in [%.2f,%.2f]"%(Nd,ranged,ranged))
     
@@ -347,10 +352,18 @@ def main(argv):
             plt.text(deltas[0]-0.02,el[l][0],"$%s$, %d" % (Nlabel(nQN[l]),l), ha = 'right')
         plt.ylabel('$E/\hbar\omega$')
         ## write out to file
-        with open('energies.dat', 'w') as f:
-            writer = csv.writer(f, delimiter='\t')
-            writer.writerows(zip(deltas,el))
- 
+        if savefilepath is not None:
+            with open(savefilepath, "w") as output:
+                if Nmax == Nmax:
+                    ntext = "N = %d" % Nmax
+                else:
+                    ntext = "N = [%d,%d]" % (Nmin,Nmax)
+                output.write("#Nilsson Diagram for %s, with kappa = %.2f, mu = %.2f\n" % (ntext,par['kappa'],par['mu']) )
+                output.write("#delta\t\t")
+                for l in range(Nlev):
+                    output.write("%s\t" % Nlabel(nQN[l]))
+                output.write("\n")
+                np.savetxt(output, np.column_stack((deltas,np.transpose(el))),fmt='%.6f',delimiter='\t') 
 
     elif plotopt['sfact']:
         plt.title("spectroscopic factors for $%s$ level" % Nlabel(nQN[plotorb]))
@@ -369,7 +382,20 @@ def main(argv):
                     print("%.4f\t" % sf[i],end="")
                 print(Slabel(sQN[l]))
         plt.ylabel('$C^2S$')
-        
+        #### write out to file
+        ##if savefilepath is not None:
+        ##    with open(savefilepath, "w") as output:
+        ##        if Nmax == Nmax:
+        ##            ntext = "N = %d" % Nmax
+        ##        else:
+        ##            ntext = "N = [%d,%d]" % (Nmin,Nmax)
+        ##        output.write("#spectroscopic factors for %s, calculated for %s, with kappa = %.2f, mu = %.2f\n" % (Nlabel(nQN[plotorb]),ntext,par['kappa'],par['mu']) )
+        ##        output.write("#delta\t\t")
+        ##        for l in range(Nlev):
+        ##            output.write("%s\t" % Slabel(sQN[l]))
+        ##        output.write("\n")
+        ##        np.savetxt(output, np.column_stack((deltas,np.transpose(sf))),fmt='%.6f',delimiter='\t') 
+
     else:
         print("Nilsson level", Nlabel(nQN[plotorb]))
 
@@ -415,11 +441,12 @@ def main(argv):
                 plt.plot(deltas,a2[plotorb])
                 plt.ylabel('$a$')
                 axes.append(plt.subplot(2,1,2, sharex = axes[0]))
-                ## write out to file
-                #with open('decop.dat', 'w') as f:
-                #    writer = csv.writer(f, delimiter='\t')
-                #    writer.writerows(zip(deltas,ap[plotorb]))
-                
+                # write out to file
+                if fout is not None:
+                    with open(fout, 'w') as f:
+                        writer = csv.writer(f, delimiter='\t')
+                        writer.writerows(zip(deltas,ap[plotorb]))
+
             if Nd==40 and ranged == 0.4:
                 print("\ndecouling parameter")
                 for d in np.linspace(-0.4,0.4,num=9, endpoint=True):

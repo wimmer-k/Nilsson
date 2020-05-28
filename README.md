@@ -64,3 +64,15 @@ As defaul the calulation is performed with standard values for kappa and mu, whi
 ```
 ./nilsson.py -N 3 -k 0.04 -m 0.55
 ```
+
+### Saving the results
+
+The results of the calculation can be saved as a plain text file using the argument "-w" or "--write".
+Currently, this only works for the energy diagram
+
+```
+./nilsson.py -n 2 -w nilsson_diagram_N2.dat	
+```
+
+
+
