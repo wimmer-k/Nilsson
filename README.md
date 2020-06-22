@@ -5,7 +5,7 @@ Optionally, the wave function decomposition in to the spherical components, the 
 
 ## Getting started
 
-The program runs with both Python 2.7 and Python 3. It has been developed using Python versions 3.5.2 and 2.7.12. Python 3 is recommended.
+The program runs with both Python2.7 and Python3. It has been developed using Python versions 3.8.2, 3.5.2 and 2.7.12. Python3 is recommended. The graphical user interface requires Python3, it uses the Tkinter bindings to the Tk GUI toolkit. Tkinter is automatically installed with Python.
 
 ### Prerequisites
 
@@ -37,7 +37,7 @@ You will see a matplotlib window opening with the Nilsson level diagram for the 
 
 ### Plotting properties
 
-In order to plot the wave function decomposition of a certain oribtal, record its ID number from the diagram and use it with the option "-o" or "--orbital":
+In order to plot the wave function decomposition of a certain orbital, record its ID number from the diagram and use it with the option "-o" or "--orbital":
 ```
 ./nilsson.py -N 2 -o 0
 ```
@@ -54,25 +54,29 @@ For each of the orbitals you can also plot the decoupling parameter ("a" or "dec
 
 ### Advanced options
 
-The range and number of delta values can be changed with the options "-Nd" and "-r", for example for a range of deformations delta = [-0.5,0.5] with 10 points on each prolate and obalte side use:
+The range and number of delta values can be changed with the options "-Nd" and "-r", for example for a range of deformations delta = [-0.5,0.5] with 10 points on each prolate and oblate side use:
 ```
 ./nilsson.py -N 2 -Nd 10 -r 0.5
 ```
 
-As defaul the calulation is performed with standard values for kappa and mu, which are reproducing the usual ordering and spacing of level for delta=0. In order to change the values for kappa and mu use the argmuments "-k" or "--kappa" and "-m" or "--mu".
+As default the calculation is performed with standard values for kappa and mu, which are reproducing the usual ordering and spacing of level for delta=0. In order to change the values for kappa and mu use the arguments "-k" or "--kappa" and "-m" or "--mu".
 
 ```
 ./nilsson.py -N 3 -k 0.04 -m 0.55
 ```
 
+For the calculation of g-factors, the value of gR, typically Z/A, and the quenching factor can be set with "-gR" or "--gfactR" and "-q" or "--gquench", respectively.
+
+If you want to switch off the DeltaN=2 couplings, use the option "-ndN2" or "--no-deltaN2"
+
 ### Saving the results
 
 The results of the calculation can be saved as a plain text file using the argument "-w" or "--write".
-Currently, this only works for the energy diagram
 
 ```
-./nilsson.py -n 2 -w nilsson_diagram_N2.dat	
+./nilsson.py -N 2 -w nilsson_diagram_N2.dat	
 ```
 
+For batch calculations, where the graphical output is not desired, the option "-noplot" can be used in combination with "-w" to just write the calculation results to a file.
 
 
