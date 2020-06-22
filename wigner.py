@@ -15,7 +15,7 @@ def Delta(j1,j2,j3):
 def wigner3J(j1,j2,j3,m1,m2,m3):
     # calculate wigner 3j symbol using the formulas, no recursion
     # https://mathworld.wolfram.com/Wigner3j-Symbol.html
-    # edmonds
+    # see also Edmonds
     
     # check some sums and triangle rules 
     if m1+m2+m3 != 0:
@@ -51,5 +51,5 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
     return sign*sqrt(Delta(j1,j2,j3)*Beta)*sumt
 
 def CG(j1,m1,j2,m2,j,m):
-    return (-1)**(m+j1-j2) * sqrt(2*j+1) * wigner3J(j1,j2,j,m1,m2,-m)
+    return ((-1)**(m+j1-j2) * sqrt(2*j+1) * wigner3J(j1,j2,j,m1,m2,-m)).real
 

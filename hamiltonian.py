@@ -4,7 +4,6 @@ from memoize import Memoize
 from wigner import CG
 import numpy as np
 
-verbose = False # True #
 defaultmu = [0,0,0,0.35,0.45,0.45,0.45,0.40]
 class Nilsson(object):
     def __init__(self,*args,**kwargs):
@@ -18,8 +17,9 @@ class Nilsson(object):
         self.states = self.createstates()
         self.par ={'kappa': 0.05, 'mu': defaultmu[self.Nmax], 'delta': 0.0}
         
-    """ creates all states until Nmax with a certain Omega and Parity """
+    
     def createstates(self):
+        """ creates all states until Nmax with a certain Omega and Parity """
         states =[]
         if self.Nmin % 2 == 0:
             Nsta = self.Nmin+self.Parity
@@ -41,16 +41,15 @@ class Nilsson(object):
         self.par['mu'] = kwargs.get('mu',defaultmu[self.Nmax])
         self.par['delta'] = kwargs.get('delta',0.3)
 
-    """ calculate the eigenvalues and vectors for a set of parameters, input model space """
     def calculate(self,delta):
+        """ calculate the eigenvalues and vectors for a set of parameters, input model space """
         self.par['delta'] = delta
         h = self.hamiltonian()
         val, vec = self.diagonalize(h)
         return val, vec
 
-    """ create the Hamiltonian matrix """
     def hamiltonian(self):
-    
+        """ create the Hamiltonian matrix """ 
         nmax = self.Nmax
         omega = self.Omega
         pairty = self.Parity
@@ -99,21 +98,21 @@ class Nilsson(object):
         
         return H + Hd*(-delta*omega_d*4./3*np.sqrt(np.pi/5))
 
-
-    #deformation part of the Hamiltonian, this should be stored to save time when many deformations are calculated
     @Memoize
     def hamiltonian_delta(self):
+        """ Deformation part of the Hamiltonian, this should be stored to save time when many deformations are calculated."""
         nstates = len(self.states)
         H = np.zeros(shape=(nstates,nstates))
         for i in range(nstates):
             N,l,ml,ms = self.states[i]
             for j in range(i,nstates):
                 N2,l2,ml2,ms2 = self.states[j]
-                H[i,j] = self.rhoY20(N,l,ml,ms,N2,l2,ml2,ms2)
+                H[i,j] = self.r2Y20(N,l,ml,ms,N2,l2,ml2,ms2)
                 H[j,i] = H[i,j]
         return H
     
-    def rhoY20(self, N,l,ml,ms,N2,l2,ml2,ms2):
+    def r2Y20(self, N,l,ml,ms,N2,l2,ml2,ms2):
+        """ Combined r^2Y20 matrix element """
         # selection rules
         if ms!=ms2 or ml!=ml2:
             return 0
@@ -127,11 +126,11 @@ class Nilsson(object):
         return self.r2(N,l,N2,l2) * self.Y20(l,ml,l2,ml2)
 
     def Y20(self, l,ml,l2,ml2):
-        # <l'm'|Y20|l,m>
+        """ Matrix elements of the oribtal part <l',m'|Y20|l,m> """
         return np.sqrt( (5./4/np.pi) * (2*l+1.)/(2*l2+1) ) * CG(l,ml,2,0, l2, ml2) * CG(l,0,2,0,l2,0) 
 
     def r2(self, N,l,N2,l2):
-        # <N',l'|r^2|N,l>
+        """ Matrix elements of the radial part <N',l'|r^2|N,l> """
         if N == N2 and l == l2:
             return (N+3./2)
         if N == N2 and l+2 == l2:
@@ -143,8 +142,8 @@ class Nilsson(object):
         if N+2 == N2 and l-2 == l2:
             return np.sqrt( (N2-l2)*(N2-l2-2) )*0.5
 
-    # diagonalize the Hamiltonian, returns eigenvalues and eigenvectors
     def diagonalize(self, ham):
+        """ Diagonalize the Hamiltonian, returns eigenvalues and eigenvectors """
         eValues, eVectors = np.linalg.eig(ham)
         idx = eValues.argsort() 
         eValues = eValues[idx]
@@ -157,12 +156,12 @@ class Nilsson(object):
         # eigenvectors are columns, therefore transpose
         return eValues, np.transpose(eVectors)
 
-    # determine the wave functions in terms of the spherical states
     def wavefunction(self, trafo, evectors):
+        """ Determine the wave functions in terms of the spherical states """
         return np.array([np.dot(trafo,v) for v in evectors])
 
-    # calculate basis transformation
     def basistrafo(self, evectors):
+        """ Calculate basis transformation """
         #print evectors
         mm = np.transpose(evectors)
         if self.Verbose:
