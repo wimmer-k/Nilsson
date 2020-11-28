@@ -50,6 +50,46 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
 
     return sign*sqrt(Delta(j1,j2,j3)*Beta)*sumt
 
+
+def wigner6J(j1,j2,j3,J1,J2,J3):
+    # triangle rules
+    if j3 > j1 + j2:
+        return 0
+    if j3 < abs(j1-j2):
+        return 0
+    if J3 > j1 + J2:
+        return 0
+    if J3 < abs(j1-J2):
+        return 0
+    if J3 > J1 + j2:
+        return 0
+    if J3 < abs(J1-j2):
+        return 0
+    if j3 > J1 + J2:
+        return 0
+    if j3 < abs(J1-J2):
+        return 0
+
+    
+    
+    # t <= j1+j2+J1+J2, <= j2+j3+J2+J3, <= j3+j1+J3+J1
+    tmax = int(min(j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1))
+    # t >= j1+j2+j3, >= j1+J2+J3, >= J1+j2+J3, >= J1+J2+j3
+    tmin = int(max(j1+j2+j3, j1+J2+J3, J1+j2+J3, J1+J2+j3, 0))
+    #print(tmin,tmax)
+
+    maxf = int(max(tmax+1, j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1))
+    factorial_list(maxf)
+    #print(factL)
+
+    sumt = 0.0
+    for t in range(tmin,tmax+1):
+        x = factL[int(t-j1-j2-j3)]*factL[int(t-j1-J2-J3)]*factL[int(t-J1-j2-J3)]*factL[int(t-J1-J2-j3)] * \
+            factL[int(j1+j2+J1+J2-t)] * factL[int(j2+j3+J2+J3-t)] * factL[int(j3+j1+J3+J1-t)]
+        sumt = sumt + (-1.0)**t *factL[t+1]/ x
+
+    return sqrt(Delta(j1,j2,j3)*Delta(j1,J2,J3)*Delta(J1,j2,J3)*Delta(J1,J2,j3))*sumt
+
 def CG(j1,m1,j2,m2,j,m):
     return ((-1)**(m+j1-j2) * sqrt(2*j+1) * wigner3J(j1,j2,j,m1,m2,-m)).real
 
