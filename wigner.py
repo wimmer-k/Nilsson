@@ -30,8 +30,7 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
     # sign prefactor:
     sign = (-1)**(j1-j2-m3)
     # largest factorial needed
-    maxf = int(max(j1+j2+j3+1, j1+abs(m1), j2+abs(m2), j3+abs(m3)))
-
+    maxf = int(max([j1 + j2 + j3 + 1, j1 + abs(m1), j2 + abs(m2), j3 + abs(m3)]))
     factorial_list(maxf)
     #print factL
 
@@ -40,9 +39,9 @@ def wigner3J(j1,j2,j3,m1,m2,m3):
 
     # range of t
     # t <= j1-m1, <= j2+m2, <= j1+j2-j3
-    tmax = int(min(j1-m1, j2+m2, j1+j2-j3))
+    tmax = int(min([j1-m1, j2+m2, j1+j2-j3]))
     # t >= j2-j3-m1, >= j1-j3+m2, >= 0
-    tmin = int(max(j2-j3-m1, j1-j3+m2, 0))
+    tmin = int(max([j2-j3-m1, j1-j3+m2, 0]))
     sumt = 0.0
     for t in range(tmin,tmax+1):
         x = factL[t] * factL[int(j3-j2+t+m1)] * factL[int(j3-j1+t-m2)] * factL[int(j1+j2-j3-t)] * factL[int(j1-t-m1)] * factL[int(j2-t+m2)]
@@ -73,12 +72,12 @@ def wigner6J(j1,j2,j3,J1,J2,J3):
     
     
     # t <= j1+j2+J1+J2, <= j2+j3+J2+J3, <= j3+j1+J3+J1
-    tmax = int(min(j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1))
+    tmax = int(min([j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1]))
     # t >= j1+j2+j3, >= j1+J2+J3, >= J1+j2+J3, >= J1+J2+j3
-    tmin = int(max(j1+j2+j3, j1+J2+J3, J1+j2+J3, J1+J2+j3, 0))
+    tmin = int(max([j1+j2+j3, j1+J2+J3, J1+j2+J3, J1+J2+j3, 0]))
     #print(tmin,tmax)
 
-    maxf = int(max(tmax+1, j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1))
+    maxf = int(max([tmax+1, j1+j2+J1+J2, j2+j3+J2+J3, j3+j1+J3+J1]))
     factorial_list(maxf)
     #print(factL)
 
